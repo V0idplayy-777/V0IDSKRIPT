@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Cyberpunk Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030308;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #282850;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7000ff;
+}
+
+body {
+  background-color: #030308;
+  color: #f1f5f9;
+  margin: 0;
+  padding: 0;
+  font-family: "Fira Code", monospace;
+}

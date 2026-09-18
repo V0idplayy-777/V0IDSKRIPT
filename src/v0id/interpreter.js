@@ -8,10 +8,6 @@ export class V0idEnvironment {
   }
 
   declare(name, value, isMut = false) {
-    if (this.vars.has(name)) {
-      this.vars.set(name, { value, isMut });
-      return value;
-    }
     this.vars.set(name, { value, isMut });
     return value;
   }
@@ -51,8 +47,7 @@ export class V0idInterpreter {
     this.mouseState = mouseState;
 
     this.globalEnv = new V0idEnvironment();
-    this.implMethods = new Map(); // StructName -> Map<methodName, func>
-    this.benchmarks = new Map();
+    this.implMethods = new Map(); // TargetName -> Map<methodName, func>
     this.stepCount = 0;
     this.maxSteps = 2000000;
 
@@ -60,7 +55,7 @@ export class V0idInterpreter {
   }
 
   initStandardLibrary() {
-    // 1. Math Functions & 3D Vector Math
+    // 1. Vector & Matrix Math Engine
     const stdMath = {
       sin: Math.sin,
       cos: Math.cos,
@@ -82,22 +77,27 @@ export class V0idInterpreter {
       lerp: (a, b, t) => a + (b - a) * t,
       clamp: (v, min, max) => Math.max(min, Math.min(max, v)),
       
-      // 3D Vector Operations
+      // Vector Math Constructors
+      vec2: (x = 0, y = 0) => ({ __isVec2: true, x, y }),
       vec3: (x = 0, y = 0, z = 0) => ({ __isVec3: true, x, y, z }),
-      vec3_add: (v1, v2) => ({ __isVec3: true, x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z }),
-      vec3_sub: (v1, v2) => ({ __isVec3: true, x: v1.x - v2.x, y: v1.y - v2.y, z: v1.z - v2.z }),
-      vec3_scale: (v, s) => ({ __isVec3: true, x: v.x * s, y: v.y * s, z: v.z * s }),
-      vec3_dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y + v1.z * v2.z,
-      vec3_cross: (v1, v2) => ({
-        __isVec3: true,
-        x: v1.y * v2.z - v1.z * v2.y,
-        y: v1.z * v2.x - v1.x * v2.z,
-        z: v1.x * v2.y - v1.y * v2.x
-      }),
-      vec3_length: (v) => Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z),
-      vec3_normalize: (v) => {
-        const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) || 1;
-        return { __isVec3: true, x: v.x / len, y: v.y / len, z: v.z / len };
+      vec4: (x = 0, y = 0, z = 0, w = 1) => ({ __isVec4: true, x, y, z, w }),
+
+      // 3D Matrix Transforms
+      mat4_identity: () => [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1
+      ],
+      mat4_perspective: (fov = 60, aspect = 1.6, near = 0.1, far = 100) => {
+        const f = 1.0 / Math.tan((fov * Math.PI / 180) / 2);
+        const rangeInv = 1.0 / (near - far);
+        return [
+          f / aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (near + far) * rangeInv, -1,
+          0, 0, near * far * rangeInv * 2, 0
+        ];
       }
     };
 
@@ -127,7 +127,7 @@ export class V0idInterpreter {
       }
     };
 
-    // 3. Collections (HashMap, List, Stack, Queue)
+    // 3. Collections (HashMap, Queue, Stack)
     const stdCollections = {
       HashMap: () => {
         const map = new Map();
@@ -152,7 +152,7 @@ export class V0idInterpreter {
       }
     };
 
-    // 4. Interactive Input Engine (key state, mouse)
+    // 4. Interactive Keyboard & Mouse Input Engine
     const input = {
       is_key_pressed: (keyName) => {
         const k = String(keyName).toLowerCase();
@@ -165,13 +165,13 @@ export class V0idInterpreter {
       })
     };
 
-    // 5. 2D/3D Graphic Viewport Engine
+    // 5. Hardware Graphics Viewport
     const gfx = {
       init: (w = 800, h = 500) => {
         this.onGfxDraw({ action: 'init', width: w, height: h });
         return { width: w, height: h };
       },
-      clear: (color = '#0b0f19') => {
+      clear: (color = '#0f172a') => {
         this.onGfxDraw({ action: 'clear', color });
       },
       rect: (x, y, w, h, color = '#3b82f6', fill = true) => {
@@ -185,21 +185,12 @@ export class V0idInterpreter {
       },
       text: (str, x, y, size = 14, color = '#ffffff') => {
         this.onGfxDraw({ action: 'text', str: String(str), x, y, size, color });
-      },
-      
-      // 3D Rendering Primitives
-      draw_cube_3d: (posX, posY, posZ, size, color, rotY = 0) => {
-        this.onGfxDraw({ action: 'draw_cube_3d', posX, posY, posZ, size, color, rotY });
-      },
-      draw_mesh_3d: (vertices, color, rotX = 0, rotY = 0) => {
-        this.onGfxDraw({ action: 'draw_mesh_3d', vertices, color, rotX, rotY });
       }
     };
 
-    // 6. Neural Autograd Engine (Deep Learning / Tensors)
+    // 6. Neural Autograd Engine
     const stdAi = {
       Value: (data, label = '') => {
-        let grad = 0.0;
         const node = {
           __isAutograd: true,
           data: parseFloat(data),
@@ -276,7 +267,7 @@ export class V0idInterpreter {
       }
     };
 
-    // Standard Library Namespace Declarations
+    // Standard Namespaces
     this.globalEnv.declare('std', {
       io: stdIo,
       math: stdMath,
@@ -294,7 +285,9 @@ export class V0idInterpreter {
   formatValue(val) {
     if (val === null || val === undefined) return 'nil';
     if (typeof val === 'boolean') return val ? 'true' : 'false';
+    if (val.__isVec2) return `Vec2(${val.x.toFixed(2)}, ${val.y.toFixed(2)})`;
     if (val.__isVec3) return `Vec3(${val.x.toFixed(2)}, ${val.y.toFixed(2)}, ${val.z.toFixed(2)})`;
+    if (val.__isTensor) return `TensorGrid(${val.rows}x${val.cols})`;
     if (val.__isAutograd) return `Value(data=${val.data.toFixed(4)}, grad=${val.grad.toFixed(4)})`;
     if (val.__isEnumVariant) return val.args.length > 0 ? `${val.variant}(${val.args.map(a => this.formatValue(a)).join(', ')})` : val.variant;
     if (typeof val === 'object') {
@@ -319,7 +312,7 @@ export class V0idInterpreter {
     const endTime = performance.now();
 
     return {
-      result,
+      result: result && result.__return ? result.value : result,
       executionTimeMs: endTime - startTime,
       totalSteps: this.stepCount
     };
@@ -329,7 +322,7 @@ export class V0idInterpreter {
     if (!node) return null;
     this.stepCount++;
     if (this.stepCount > this.maxSteps) {
-      throw new Error(`[V0IDSKRIPT Security Limit] Exceeded maximum safety step threshold (${this.maxSteps} steps).`);
+      throw new Error(`[V0IDSKRIPT Security Limit] Exceeded step threshold (${this.maxSteps} steps).`);
     }
 
     switch (node.type) {
@@ -341,7 +334,7 @@ export class V0idInterpreter {
         return lastVal;
       }
 
-      case 'BlockStatement': {
+      case 'DoBlockStatement': {
         const blockEnv = new V0idEnvironment(env);
         let lastVal = null;
         for (const stmt of node.body) {
@@ -374,14 +367,10 @@ export class V0idInterpreter {
         return fnObj;
       }
 
-      case 'StructDeclaration': {
-        const structDef = {
-          __isStructDef: true,
-          name: node.name,
-          fields: node.fields
-        };
-        env.declare(node.name, structDef, false);
-        return structDef;
+      case 'RecordDeclaration': {
+        const recDef = { __isRecordDef: true, name: node.name, fields: node.fields };
+        env.declare(node.name, recDef, false);
+        return recDef;
       }
 
       case 'EnumDeclaration': {
@@ -398,6 +387,12 @@ export class V0idInterpreter {
         return enumObj;
       }
 
+      case 'ContractDeclaration': {
+        const contractDef = { __isContractDef: true, name: node.name, methods: node.methods };
+        env.declare(node.name, contractDef, false);
+        return contractDef;
+      }
+
       case 'ImplDeclaration': {
         let methodMap = this.implMethods.get(node.targetName);
         if (!methodMap) {
@@ -408,6 +403,21 @@ export class V0idInterpreter {
           methodMap.set(m.name, m);
         }
         return null;
+      }
+
+      case 'TensorDeclaration': {
+        const arr2d = node.rows.map(r => r.map(cell => this.eval(cell, env)));
+        const rows = arr2d.length;
+        const cols = arr2d[0].length;
+        const data = new Float64Array(rows * cols);
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            data[r * cols + c] = arr2d[r][c];
+          }
+        }
+        const tensorObj = { __isTensor: true, rows, cols, data };
+        env.declare(node.name, tensorObj, true);
+        return tensorObj;
       }
 
       case 'IfStatement': {
@@ -424,7 +434,7 @@ export class V0idInterpreter {
         let count = 0;
         while (this.isTruthy(this.eval(node.condition, env))) {
           count++;
-          if (count > 500000) throw new Error("[V0IDSKRIPT Safety Limit] While loop infinite execution limit reached.");
+          if (count > 500000) throw new Error("[V0IDSKRIPT Limit] While loop execution safety limit reached.");
           const res = this.eval(node.body, env);
           if (res && res.__return) return res;
           if (res && res.__break) break;
@@ -432,7 +442,7 @@ export class V0idInterpreter {
         return null;
       }
 
-      case 'ForStatement': {
+      case 'LoopStatement': {
         const iterable = this.eval(node.iterable, env);
         if (Array.isArray(iterable)) {
           for (const item of iterable) {
@@ -451,7 +461,9 @@ export class V0idInterpreter {
             if (res && res.__break) break;
           }
         } else if (iterable && typeof iterable.start === 'number' && typeof iterable.end === 'number') {
-          for (let i = iterable.start; i < iterable.end; i++) {
+          const start = iterable.start;
+          const end = iterable.isInclusive ? iterable.end + 1 : iterable.end;
+          for (let i = start; i < end; i++) {
             const loopEnv = new V0idEnvironment(env);
             loopEnv.declare(node.variable, i, true);
             const res = this.eval(node.body, loopEnv);
@@ -462,19 +474,7 @@ export class V0idInterpreter {
         return null;
       }
 
-      case 'LoopStatement': {
-        let count = 0;
-        while (true) {
-          count++;
-          if (count > 500000) throw new Error("[V0IDSKRIPT Safety Limit] Unbounded loop safety threshold reached.");
-          const res = this.eval(node.body, env);
-          if (res && res.__return) return res;
-          if (res && res.__break) break;
-        }
-        return null;
-      }
-
-      case 'MatchStatement': {
+      case 'SelectStatement': {
         const disc = this.eval(node.discriminant, env);
         for (const arm of node.cases) {
           const matchResult = this.matchPattern(arm.pattern, disc, env);
@@ -503,17 +503,7 @@ export class V0idInterpreter {
       case 'AssignmentExpression': {
         const rightVal = this.eval(node.right, env);
         if (node.left.type === 'Identifier') {
-          if (node.operator === '=') {
-            env.assign(node.left.name, rightVal);
-          } else {
-            const curr = env.get(node.left.name);
-            let updated = curr;
-            if (node.operator === '+=') updated = curr + rightVal;
-            if (node.operator === '-=') updated = curr - rightVal;
-            if (node.operator === '*=') updated = curr * rightVal;
-            if (node.operator === '/=') updated = curr / rightVal;
-            env.assign(node.left.name, updated);
-          }
+          env.assign(node.left.name, rightVal);
           return rightVal;
         } else if (node.left.type === 'MemberExpression') {
           const obj = this.eval(node.left.object, env);
@@ -521,7 +511,7 @@ export class V0idInterpreter {
           obj[prop] = rightVal;
           return rightVal;
         }
-        throw new Error("[V0IDSKRIPT Error] Invalid left-hand side assignment target.");
+        throw new Error("[V0IDSKRIPT Error] Invalid assignment target.");
       }
 
       case 'BinaryExpression': {
@@ -559,6 +549,70 @@ export class V0idInterpreter {
         }
       }
 
+      case 'MatrixMultiplyExpression': { // #* Tensor GEMM Matrix Multiplication
+        const A = this.eval(node.left, env);
+        const B = this.eval(node.right, env);
+        if (!A.__isTensor || !B.__isTensor) throw new Error("[Matrix Error] Operands of '#*' must be Tensors.");
+        if (A.cols !== B.rows) throw new Error(`[Matrix Error] Dimension mismatch (${A.rows}x${A.cols}) vs (${B.rows}x${B.cols})`);
+
+        const C_data = new Float64Array(A.rows * B.cols);
+        const K = A.cols, M = A.rows, N = B.cols;
+        for (let i = 0; i < M; i++) {
+          for (let k = 0; k < K; k++) {
+            const aik = A.data[i * K + k];
+            for (let j = 0; j < N; j++) {
+              C_data[i * N + j] += aik * B.data[k * N + j];
+            }
+          }
+        }
+        return { __isTensor: true, rows: M, cols: N, data: C_data };
+      }
+
+      case 'DotProductExpression': { // <.> Vector Dot Product
+        const u = this.eval(node.left, env);
+        const v = this.eval(node.right, env);
+        if (u.__isVec3 && v.__isVec3) return u.x * v.x + u.y * v.y + u.z * v.z;
+        if (u.__isVec2 && v.__isVec2) return u.x * v.x + u.y * v.y;
+        if (Array.isArray(u) && Array.isArray(v)) {
+          let sum = 0;
+          for (let i = 0; i < Math.min(u.length, v.length); i++) sum += u[i] * v[i];
+          return sum;
+        }
+        throw new Error("[Vector Error] Invalid operands for dot product '<.>'");
+      }
+
+      case 'CrossProductExpression': { // <x> Vector Cross Product
+        const u = this.eval(node.left, env);
+        const v = this.eval(node.right, env);
+        if (u.__isVec3 && v.__isVec3) {
+          return {
+            __isVec3: true,
+            x: u.y * v.z - u.z * v.y,
+            y: u.z * v.x - u.x * v.z,
+            z: u.x * v.y - u.y * v.x
+          };
+        }
+        throw new Error("[Vector Error] Operands for cross product '<x>' must be Vec3.");
+      }
+
+      case 'VectorMapExpression': {
+        const target = this.eval(node.target, env);
+        const fn = this.eval(node.callback, env);
+        if (Array.isArray(target)) {
+          return target.map(item => this.applyCallee(fn, [item], env));
+        }
+        return target;
+      }
+
+      case 'VectorFilterExpression': {
+        const target = this.eval(node.target, env);
+        const fn = this.eval(node.callback, env);
+        if (Array.isArray(target)) {
+          return target.filter(item => this.isTruthy(this.applyCallee(fn, [item], env)));
+        }
+        return target;
+      }
+
       case 'PipelineExpression': {
         const leftVal = this.eval(node.left, env);
         if (node.right.type === 'CallExpression') {
@@ -584,15 +638,9 @@ export class V0idInterpreter {
 
         if (Array.isArray(obj)) {
           if (prop === 'length') return obj.length;
-          if (prop === 'map') {
-            return (fn) => obj.map(item => this.applyCallee(fn, [item], env));
-          }
-          if (prop === 'filter') {
-            return (fn) => obj.filter(item => this.isTruthy(this.applyCallee(fn, [item], env)));
-          }
-          if (prop === 'reduce') {
-            return (fn, init) => obj.reduce((acc, item) => this.applyCallee(fn, [acc, item], env), init);
-          }
+          if (prop === 'map') return (fn) => obj.map(item => this.applyCallee(fn, [item], env));
+          if (prop === 'filter') return (fn) => obj.filter(item => this.isTruthy(this.applyCallee(fn, [item], env)));
+          if (prop === 'reduce') return (fn, init) => obj.reduce((acc, item) => this.applyCallee(fn, [acc, item], env), init);
           if (prop === 'includes') return (item) => obj.includes(item);
           if (prop === 'push') return (...items) => obj.push(...items);
           if (prop === 'pop') return () => obj.pop();
@@ -610,14 +658,6 @@ export class V0idInterpreter {
         return obj[node.property];
       }
 
-      case 'ForceUnwrapExpression': {
-        const val = this.eval(node.argument, env);
-        if (val === null || val === undefined) {
-          throw new Error("[V0IDSKRIPT Error] Forced unwrap failed on nil value!");
-        }
-        return val;
-      }
-
       case 'NumericLiteral': return node.value;
       case 'StringLiteral': return node.value;
       case 'BooleanLiteral': return node.value;
@@ -625,18 +665,26 @@ export class V0idInterpreter {
       case 'Identifier': return env.get(node.name);
 
       case 'RangeLiteral': {
-        return { start: node.start, end: this.eval(node.end, env) };
+        return { start: node.start, end: this.eval(node.end, env), isInclusive: node.isInclusive };
       }
 
       case 'ArrayLiteral': {
         return node.elements.map(e => this.eval(e, env));
       }
 
+      case 'StructLiteral': {
+        const obj = { __structType: node.structName };
+        for (const prop of node.properties) {
+          obj[prop.key] = this.eval(prop.value, env);
+        }
+        return obj;
+      }
+
       case 'ClosureExpression': {
         return {
           __isFunction: true,
           params: node.params.map(p => ({ name: p })),
-          body: { type: 'BlockStatement', body: [{ type: 'ReturnStatement', argument: node.body }] },
+          body: node.body.type === 'DoBlockStatement' ? node.body : { type: 'DoBlockStatement', body: [{ type: 'ReturnStatement', argument: node.body }] },
           closureEnv: env
         };
       }

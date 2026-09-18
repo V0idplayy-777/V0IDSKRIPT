@@ -1,0 +1,41 @@
+// Industrial V0IDSKRIPT Test Suite
+std::io::println("=================================================");
+std::io::println("       V0IDSKRIPT INDUSTRIAL RUNTIME TEST        ");
+std::io::println("=================================================");
+
+let mut x = 10;
+let mut y = 20;
+let z = x + y;
+std::io::printf("Base Sum x + y = %d", z);
+
+// 3D Vector Math
+let v1 = std::math::vec3(1.0, 2.0, 3.0);
+let v2 = std::math::vec3(4.0, 5.0, 6.0);
+let v3 = std::math::vec3_add(v1, v2);
+std::io::printf("3D Vector Addition Result: %s", v3);
+
+// Pipeline & Mapping
+let numbers = [1, 2, 3, 4, 5];
+let squared = numbers.map(|n| => n * n);
+std::io::println("Vector Mapping Result:");
+std::io::println(squared);
+
+// QuickSort Benchmark
+fn quicksort(arr: Array) -> Array {
+    if (arr.length <= 1) { return arr; }
+    let pivot = arr[0];
+    let mut left = [];
+    let mut right = [];
+    for (i in 1..arr.length) {
+        if (arr[i] < pivot) { left.push(arr[i]); }
+        else { right.push(arr[i]); }
+    }
+    return quicksort(left) + [pivot] + quicksort(right);
+}
+
+let sorted = std::time::bench("QuickSort Array Benchmark", || => {
+    return quicksort([9, 3, 7, 1, 8, 2, 5, 4]);
+});
+
+std::io::println("QuickSort Sorted Result:");
+std::io::println(sorted);

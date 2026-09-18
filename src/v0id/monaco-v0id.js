@@ -1,5 +1,5 @@
 /**
- * Professional Monaco Editor Syntax Highlighting Theme for V0IDSKRIPT
+ * Monaco Editor Syntax Highlighting Definition for V0IDSKRIPT v3.0
  */
 
 export function registerV0idLanguage(monaco) {
@@ -14,10 +14,11 @@ export function registerV0idLanguage(monaco) {
   monaco.languages.setMonarchTokensProvider('v0idskript', {
     defaultToken: 'invalid',
     keywords: [
-      'let', 'mut', 'const', 'fn', 'struct', 'enum', 'trait', 'impl',
-      'type', 'defer', 'match', 'if', 'else', 'while', 'for', 'in',
-      'loop', 'return', 'break', 'continue', 'async', 'await', 'spawn',
-      'pub', 'self', 'Self', 'ref', 'unsafe', 'true', 'false', 'nil', 'null'
+      'val', 'var', 'pin', 'const', 'type', 'record', 'enum', 'contract',
+      'impl', 'bind', 'fn', 'def', 'spec', 'in', 'out', 'inout', 'own',
+      'ref', 'rel', 'do', 'pass', 'end', 'select', 'case', 'else', 'if',
+      'while', 'loop', 'return', 'break', 'continue', 'raise', 'rescue',
+      'ensure', 'tensor', 'grid', 'true', 'false', 'nil'
     ],
 
     typeKeywords: [
@@ -30,9 +31,9 @@ export function registerV0idLanguage(monaco) {
     ],
 
     operators: [
-      '|>', '~>', '::', '->', '=>', '..', '...', '??', '?.', '!!',
-      '=', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!',
-      '+', '-', '*', '/', '%', '+=', '-=', '*=', '/=', '%='
+      '#*', '<.>', '<x>', '|>', '::', ':=', '<==', '->', '=>', '@map', '@filter', '@reduce',
+      '..=', '..', '=', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!',
+      '+', '-', '*', '/', '%'
     ],
 
     symbols: /[=><!~?:&|+\-*\/^%#@]+/,
@@ -49,6 +50,7 @@ export function registerV0idLanguage(monaco) {
         }],
 
         [/\s+/, 'white'],
+        [/#.*/, 'comment'],
         [/\/\/.*/, 'comment'],
         [/\/\*/, 'comment', '@comment'],
 
@@ -78,7 +80,7 @@ export function registerV0idLanguage(monaco) {
     }
   });
 
-  // Modern VS Code Dark Studio Theme
+  // Industrial VS Code Dark Studio Theme
   monaco.editor.defineTheme('v0id-studio', {
     base: 'vs-dark',
     inherit: true,
@@ -87,7 +89,7 @@ export function registerV0idLanguage(monaco) {
       { token: 'type', foreground: '4EC9B0', fontStyle: 'bold' },
       { token: 'variable.predefined', foreground: 'DCDCAA' },
       { token: 'identifier', foreground: '9CDCFE' },
-      { token: 'operator', foreground: 'D4D4D4' },
+      { token: 'operator', foreground: 'D4D4D4', fontStyle: 'bold' },
       { token: 'number', foreground: 'B5CEA8' },
       { token: 'string', foreground: 'CE9178' },
       { token: 'comment', foreground: '6A9955', fontStyle: 'italic' }

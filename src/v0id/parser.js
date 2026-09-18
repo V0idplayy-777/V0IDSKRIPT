@@ -44,69 +44,51 @@ export class Parser {
   }
 
   parseStatement() {
-    const token = this.peek();
-
-    // Attributes like #[inline]
-    let attributes = [];
-    if (token.type === TokenType.HASH && this.peek(1).type === TokenType.LBRACK) {
-      this.match(TokenType.HASH);
-      this.match(TokenType.LBRACK);
-      const attr = this.expect(TokenType.IDENTIFIER, "Expected attribute name").value;
-      this.expect(TokenType.RBRACK, "Expected ']' after attribute");
-      attributes.push(attr);
-    }
-
     const curr = this.peek();
 
-    // Variable Declarations
-    if ([TokenType.LET, TokenType.MUT, TokenType.CONST].includes(curr.type)) {
-      return this.parseVarDecl(attributes);
+    // Variable Declarations (val, var, pin, const)
+    if ([TokenType.VAL, TokenType.VAR, TokenType.PIN, TokenType.CONST].includes(curr.type)) {
+      return this.parseVarDecl();
     }
 
-    // Function Declaration
-    if (curr.type === TokenType.FN || (curr.type === TokenType.ASYNC && this.peek(1).type === TokenType.FN)) {
-      return this.parseFunctionDecl(attributes);
+    // Function Declaration (fn, def)
+    if (curr.type === TokenType.FN || curr.type === TokenType.DEF) {
+      return this.parseFunctionDecl();
     }
 
-    // Struct Declaration
-    if (curr.type === TokenType.STRUCT) {
-      return this.parseStructDecl();
+    // Type Record / Enum Declaration
+    if (curr.type === TokenType.TYPE) {
+      return this.parseTypeDecl();
     }
 
-    // Enum Declaration
-    if (curr.type === TokenType.ENUM) {
-      return this.parseEnumDecl();
+    // Contract Declaration
+    if (curr.type === TokenType.CONTRACT) {
+      return this.parseContractDecl();
     }
 
-    // Trait Declaration
-    if (curr.type === TokenType.TRAIT) {
-      return this.parseTraitDecl();
-    }
-
-    // Impl Block
+    // Impl Declaration
     if (curr.type === TokenType.IMPL) {
       return this.parseImplDecl();
     }
 
-    // Defer Statement
-    if (curr.type === TokenType.DEFER) {
-      this.advance(); // defer
-      const stmt = this.parseStatement();
-      return { type: 'DeferStatement', statement: stmt };
+    // Tensor Declaration Block
+    if (curr.type === TokenType.TENSOR) {
+      return this.parseTensorDecl();
     }
 
-    // Control Flow
+    // Control Flow Structures
     if (curr.type === TokenType.IF) return this.parseIfStatement();
     if (curr.type === TokenType.WHILE) return this.parseWhileStatement();
-    if (curr.type === TokenType.FOR) return this.parseForStatement();
     if (curr.type === TokenType.LOOP) return this.parseLoopStatement();
-    if (curr.type === TokenType.MATCH) return this.parseMatchStatement();
+    if (curr.type === TokenType.SELECT) return this.parseSelectStatement();
 
-    // Return / Break / Continue
+    // Jump Statements
     if (curr.type === TokenType.RETURN) {
       this.advance();
       let expr = null;
-      if (this.peek().type !== TokenType.SEMICOLON) expr = this.parseExpression();
+      if (this.peek().type !== TokenType.SEMICOLON && this.peek().type !== TokenType.END) {
+        expr = this.parseExpression();
+      }
       this.match(TokenType.SEMICOLON);
       return { type: 'ReturnStatement', argument: expr };
     }
@@ -123,9 +105,9 @@ export class Parser {
       return { type: 'ContinueStatement' };
     }
 
-    // Block Statement
-    if (curr.type === TokenType.LBRACE) {
-      return this.parseBlockStatement();
+    // Scope Block do ... end
+    if (curr.type === TokenType.DO) {
+      return this.parseDoBlock();
     }
 
     // Expression Statement
@@ -134,16 +116,12 @@ export class Parser {
     return { type: 'ExpressionStatement', expression: expr };
   }
 
-  parseVarDecl(attributes = []) {
-    const kind = this.advance().value; // let / mut / const
-    let isMut = kind === 'mut';
+  parseVarDecl() {
+    const kindToken = this.advance(); // val, var, pin, const
+    const kind = kindToken.value;
+    const isMut = kind === 'var' || kind === 'pin';
 
-    if (this.peek().type === TokenType.MUT) {
-      this.advance();
-      isMut = true;
-    }
-
-    const name = this.expect(TokenType.IDENTIFIER, "Expected variable identifier").value;
+    const name = this.expect(TokenType.IDENTIFIER, "Expected variable name identifier").value;
 
     let typeAnnotation = null;
     if (this.match(TokenType.COLON)) {
@@ -151,177 +129,216 @@ export class Parser {
     }
 
     let init = null;
-    if (this.match(TokenType.EQ)) {
+    if (this.match(TokenType.EQ, TokenType.COLON_EQ)) {
       init = this.parseExpression();
     }
 
     this.match(TokenType.SEMICOLON);
 
-    return {
-      type: 'VariableDeclaration',
-      kind,
-      name,
-      isMut,
-      typeAnnotation,
-      init,
-      attributes
-    };
+    return { type: 'VariableDeclaration', kind, name, isMut, typeAnnotation, init };
   }
 
   parseTypeAnnotation() {
-    let name = this.expect(TokenType.IDENTIFIER, "Expected type identifier").value;
+    let name = this.expect(TokenType.IDENTIFIER, "Expected type name").value;
     if (this.match(TokenType.LT)) {
-      const genericArgs = [];
+      const typeParams = [];
       while (this.peek().type !== TokenType.GT && this.peek().type !== TokenType.EOF) {
-        genericArgs.push(this.parseTypeAnnotation());
+        typeParams.push(this.parseTypeAnnotation());
         if (!this.match(TokenType.COMMA)) break;
       }
       this.expect(TokenType.GT, "Expected '>' in type parameter");
-      return `${name}<${genericArgs.join(', ')}>`;
+      return `${name}<${typeParams.join(', ')}>`;
     }
     return name;
   }
 
-  parseFunctionDecl(attributes = []) {
-    const isAsync = !!this.match(TokenType.ASYNC);
-    this.expect(TokenType.FN, "Expected 'fn'");
+  parseFunctionDecl() {
+    this.advance(); // fn or def
     const name = this.expect(TokenType.IDENTIFIER, "Expected function name").value;
 
+    // Optional Generic Parameters [T]
+    let generics = [];
+    if (this.match(TokenType.LBRACK)) {
+      while (this.peek().type !== TokenType.RBRACK && this.peek().type !== TokenType.EOF) {
+        generics.push(this.expect(TokenType.IDENTIFIER).value);
+        if (!this.match(TokenType.COMMA)) break;
+      }
+      this.expect(TokenType.RBRACK);
+    }
+
+    // Parameters (in/inout/out param: Type)
     this.expect(TokenType.LPAREN, "Expected '(' after function name");
     const params = [];
     while (this.peek().type !== TokenType.RPAREN && this.peek().type !== TokenType.EOF) {
-      const isParamMut = !!this.match(TokenType.MUT);
-      const isRef = !!this.match(TokenType.AMPERSAND, TokenType.REF);
+      let mode = 'in';
+      if (this.match(TokenType.INOUT)) mode = 'inout';
+      else if (this.match(TokenType.OUT)) mode = 'out';
+      else this.match(TokenType.IN);
+
       const pName = this.expect(TokenType.IDENTIFIER, "Expected parameter name").value;
       let pType = null;
       if (this.match(TokenType.COLON)) {
         pType = this.parseTypeAnnotation();
       }
-      params.push({ name: pName, type: pType, isMut: isParamMut, isRef });
+      params.push({ name: pName, type: pType, mode });
       if (!this.match(TokenType.COMMA)) break;
     }
-    this.expect(TokenType.RPAREN, "Expected ')' after parameters");
+    this.expect(TokenType.RPAREN, "Expected ')' after parameter list");
 
     let returnType = null;
     if (this.match(TokenType.THIN_ARROW)) {
       returnType = this.parseTypeAnnotation();
     }
 
-    const body = this.parseBlockStatement();
+    // Function Block Bounds: :: do ... end or { ... }
+    this.match(TokenType.DOUBLE_COLON);
+    const body = this.parseDoBlock();
 
-    return {
-      type: 'FunctionDeclaration',
-      name,
-      params,
-      returnType,
-      isAsync,
-      attributes,
-      body
-    };
+    return { type: 'FunctionDeclaration', name, generics, params, returnType, body };
   }
 
-  parseStructDecl() {
-    this.expect(TokenType.STRUCT, "Expected 'struct'");
-    const name = this.expect(TokenType.IDENTIFIER, "Expected struct name").value;
-    this.expect(TokenType.LBRACE, "Expected '{' in struct definition");
+  parseTypeDecl() {
+    this.expect(TokenType.TYPE, "Expected 'type'");
+    const name = this.expect(TokenType.IDENTIFIER, "Expected type identifier").value;
+    this.expect(TokenType.DOUBLE_COLON, "Expected '::' after type identifier");
 
-    const fields = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      const isPub = !!this.match(TokenType.PUB);
-      const fieldName = this.expect(TokenType.IDENTIFIER, "Expected field name").value;
-      this.expect(TokenType.COLON, "Expected ':' after field name");
-      const fieldType = this.parseTypeAnnotation();
-      fields.push({ name: fieldName, type: fieldType, isPub });
-      this.match(TokenType.COMMA);
-      this.match(TokenType.SEMICOLON);
-    }
-    this.expect(TokenType.RBRACE, "Expected '}' in struct definition");
-
-    return { type: 'StructDeclaration', name, fields };
-  }
-
-  parseEnumDecl() {
-    this.expect(TokenType.ENUM, "Expected 'enum'");
-    const name = this.expect(TokenType.IDENTIFIER, "Expected enum name").value;
-    this.expect(TokenType.LBRACE, "Expected '{' in enum definition");
-
-    const variants = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      const variantName = this.expect(TokenType.IDENTIFIER, "Expected enum variant identifier").value;
-      let payload = null;
-
-      // Tuple variant: Variant(i32, String)
-      if (this.match(TokenType.LPAREN)) {
-        const tupleTypes = [];
-        while (this.peek().type !== TokenType.RPAREN && this.peek().type !== TokenType.EOF) {
-          tupleTypes.push(this.parseTypeAnnotation());
-          if (!this.match(TokenType.COMMA)) break;
-        }
-        this.expect(TokenType.RPAREN);
-        payload = { kind: 'tuple', types: tupleTypes };
+    if (this.match(TokenType.RECORD)) {
+      this.expect(TokenType.LBRACE, "Expected '{' in record type definition");
+      const fields = [];
+      while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
+        const fieldName = this.expect(TokenType.IDENTIFIER, "Expected field name").value;
+        this.expect(TokenType.COLON, "Expected ':' after field name");
+        const fieldType = this.parseTypeAnnotation();
+        fields.push({ name: fieldName, type: fieldType });
+        this.match(TokenType.COMMA);
+        this.match(TokenType.SEMICOLON);
       }
-
-      variants.push({ name: variantName, payload });
-      this.match(TokenType.COMMA);
+      this.expect(TokenType.RBRACE, "Expected '}' in record definition");
+      return { type: 'RecordDeclaration', name, fields };
     }
-    this.expect(TokenType.RBRACE, "Expected '}' in enum definition");
 
-    return { type: 'EnumDeclaration', name, variants };
+    if (this.match(TokenType.ENUM)) {
+      this.expect(TokenType.LBRACE, "Expected '{' in enum type definition");
+      const variants = [];
+      while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
+        const variantName = this.expect(TokenType.IDENTIFIER, "Expected enum variant identifier").value;
+        let tupleTypes = [];
+        if (this.match(TokenType.LPAREN)) {
+          while (this.peek().type !== TokenType.RPAREN && this.peek().type !== TokenType.EOF) {
+            tupleTypes.push(this.parseTypeAnnotation());
+            if (!this.match(TokenType.COMMA)) break;
+          }
+          this.expect(TokenType.RPAREN);
+        }
+        variants.push({ name: variantName, tupleTypes });
+        this.match(TokenType.COMMA);
+        this.match(TokenType.SEMICOLON);
+      }
+      this.expect(TokenType.RBRACE, "Expected '}' in enum definition");
+      return { type: 'EnumDeclaration', name, variants };
+    }
+
+    throw new Error(`[V0IDSKRIPT Parse Error] Expected 'record' or 'enum' in type definition for '${name}'`);
   }
 
-  parseTraitDecl() {
-    this.expect(TokenType.TRAIT, "Expected 'trait'");
-    const name = this.expect(TokenType.IDENTIFIER, "Expected trait name").value;
-    this.expect(TokenType.LBRACE, "Expected '{' in trait declaration");
+  parseContractDecl() {
+    this.expect(TokenType.CONTRACT, "Expected 'contract'");
+    const name = this.expect(TokenType.IDENTIFIER, "Expected contract identifier").value;
+    this.expect(TokenType.DOUBLE_COLON, "Expected '::' after contract identifier");
+    this.expect(TokenType.SPEC, "Expected 'spec' block start in contract");
 
     const methods = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      methods.push(this.parseFunctionDecl([]));
+    while (this.peek().type !== TokenType.END && this.peek().type !== TokenType.EOF) {
+      methods.push(this.parseFunctionDecl());
     }
-    this.expect(TokenType.RBRACE, "Expected '}' in trait declaration");
+    this.expect(TokenType.END, "Expected 'end' at end of contract specification");
 
-    return { type: 'TraitDeclaration', name, methods };
+    return { type: 'ContractDeclaration', name, methods };
   }
 
   parseImplDecl() {
     this.expect(TokenType.IMPL, "Expected 'impl'");
-    let traitName = null;
-    let targetName = this.expect(TokenType.IDENTIFIER, "Expected target identifier in impl").value;
+    let contractName = null;
+    let targetName = this.expect(TokenType.IDENTIFIER, "Expected target or contract identifier").value;
 
     if (this.match(TokenType.FOR)) {
-      traitName = targetName;
-      targetName = this.expect(TokenType.IDENTIFIER, "Expected target struct for trait impl").value;
+      contractName = targetName;
+      targetName = this.expect(TokenType.IDENTIFIER, "Expected target identifier after 'for'").value;
     }
 
-    this.expect(TokenType.LBRACE, "Expected '{' in impl block");
+    this.expect(TokenType.DOUBLE_COLON, "Expected '::' in impl block");
+    this.expect(TokenType.BIND, "Expected 'bind' block start in impl declaration");
+
     const methods = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      methods.push(this.parseFunctionDecl([]));
+    while (this.peek().type !== TokenType.END && this.peek().type !== TokenType.EOF) {
+      methods.push(this.parseFunctionDecl());
     }
-    this.expect(TokenType.RBRACE, "Expected '}' in impl block");
+    this.expect(TokenType.END, "Expected 'end' at end of impl bind block");
 
-    return { type: 'ImplDeclaration', traitName, targetName, methods };
+    return { type: 'ImplDeclaration', contractName, targetName, methods };
+  }
+
+  parseTensorDecl() {
+    this.expect(TokenType.TENSOR, "Expected 'tensor'");
+    const name = this.expect(TokenType.IDENTIFIER, "Expected tensor variable identifier").value;
+    this.expect(TokenType.DOUBLE_COLON, "Expected '::'");
+    this.expect(TokenType.GRID, "Expected 'grid'");
+
+    this.expect(TokenType.LBRACK, "Expected '[' at start of tensor grid matrix");
+    const rows = [];
+    let currentRow = [];
+
+    while (this.peek().type !== TokenType.RBRACK && this.peek().type !== TokenType.EOF) {
+      if (this.peek().type === TokenType.SEMICOLON) {
+        this.advance();
+        if (currentRow.length > 0) {
+          rows.push(currentRow);
+          currentRow = [];
+        }
+        continue;
+      }
+      currentRow.push(this.parseExpression());
+      if (this.peek().type === TokenType.COMMA) this.advance();
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+    this.expect(TokenType.RBRACK, "Expected ']' at end of tensor grid");
+
+    this.match(TokenType.SEMICOLON);
+
+    return { type: 'TensorDeclaration', name, rows };
+  }
+
+  parseDoBlock() {
+    if (this.peek().type === TokenType.DO) this.advance();
+    else if (this.peek().type === TokenType.LBRACE) this.advance();
+
+    const body = [];
+    while (this.peek().type !== TokenType.END && this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
+      body.push(this.parseStatement());
+    }
+
+    if (this.peek().type === TokenType.END) this.advance();
+    else if (this.peek().type === TokenType.RBRACE) this.advance();
+
+    return { type: 'DoBlockStatement', body };
   }
 
   parseIfStatement() {
     this.expect(TokenType.IF, "Expected 'if'");
-    let condition = null;
-    if (this.peek().type === TokenType.LPAREN) {
-      this.advance();
-      condition = this.parseExpression();
-      this.expect(TokenType.RPAREN);
-    } else {
-      condition = this.parseExpression();
-    }
+    let hasParen = !!this.match(TokenType.LPAREN);
+    const condition = this.parseExpression();
+    if (hasParen) this.expect(TokenType.RPAREN);
 
-    const consequent = this.parseBlockStatement();
+    this.match(TokenType.DOUBLE_COLON);
+    const consequent = this.parseDoBlock();
     let alternate = null;
 
     if (this.match(TokenType.ELSE)) {
       if (this.peek().type === TokenType.IF) {
         alternate = this.parseIfStatement();
       } else {
-        alternate = this.parseBlockStatement();
+        this.match(TokenType.DOUBLE_COLON);
+        alternate = this.parseDoBlock();
       }
     }
 
@@ -330,72 +347,71 @@ export class Parser {
 
   parseWhileStatement() {
     this.expect(TokenType.WHILE, "Expected 'while'");
-    let condition = null;
-    if (this.peek().type === TokenType.LPAREN) {
-      this.advance();
-      condition = this.parseExpression();
-      this.expect(TokenType.RPAREN);
-    } else {
-      condition = this.parseExpression();
-    }
-    const body = this.parseBlockStatement();
-    return { type: 'WhileStatement', condition, body };
-  }
-
-  parseForStatement() {
-    this.expect(TokenType.FOR, "Expected 'for'");
     let hasParen = !!this.match(TokenType.LPAREN);
-    let varName = this.expect(TokenType.IDENTIFIER, "Expected loop variable name").value;
-    this.expect(TokenType.IN, "Expected 'in'");
-    const iterable = this.parseExpression();
+    const condition = this.parseExpression();
     if (hasParen) this.expect(TokenType.RPAREN);
-    const body = this.parseBlockStatement();
-    return { type: 'ForStatement', variable: varName, iterable, body };
+
+    this.match(TokenType.DOUBLE_COLON);
+    this.match(TokenType.PASS);
+    const body = this.parseDoBlock();
+
+    return { type: 'WhileStatement', condition, body };
   }
 
   parseLoopStatement() {
     this.expect(TokenType.LOOP, "Expected 'loop'");
-    const body = this.parseBlockStatement();
-    return { type: 'LoopStatement', body };
+    let hasParen = !!this.match(TokenType.LPAREN);
+    const variable = this.expect(TokenType.IDENTIFIER, "Expected loop variable identifier").value;
+    this.expect(TokenType.IN, "Expected 'in'");
+    const iterable = this.parseExpression();
+    if (hasParen) this.expect(TokenType.RPAREN);
+
+    this.match(TokenType.DOUBLE_COLON);
+    this.match(TokenType.PASS);
+    const body = this.parseDoBlock();
+
+    return { type: 'LoopStatement', variable, iterable, body };
   }
 
-  parseMatchStatement() {
-    this.expect(TokenType.MATCH, "Expected 'match'");
+  parseSelectStatement() {
+    this.expect(TokenType.SELECT, "Expected 'select'");
     const discriminant = this.parseExpression();
-    this.expect(TokenType.LBRACE, "Expected '{' in match statement");
+    this.match(TokenType.DOUBLE_COLON);
 
     const cases = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      let pattern = this.parsePattern();
-      let guard = null;
-
-      if (this.match(TokenType.IF)) {
-        guard = this.parseExpression();
+    while (this.peek().type !== TokenType.END && this.peek().type !== TokenType.EOF) {
+      if (this.match(TokenType.CASE)) {
+        const pattern = this.parsePattern();
+        let guard = null;
+        if (this.match(TokenType.IF)) {
+          guard = this.parseExpression();
+        }
+        this.expect(TokenType.FAT_ARROW, "Expected '=>' in select arm");
+        const body = this.parseStatement();
+        cases.push({ pattern, guard, body });
+      } else if (this.match(TokenType.ELSE)) {
+        this.expect(TokenType.FAT_ARROW, "Expected '=>' in select default branch");
+        const body = this.parseStatement();
+        cases.push({ pattern: { type: 'WildcardPattern' }, guard: null, body });
+      } else {
+        break;
       }
-
-      this.expect(TokenType.FAT_ARROW, "Expected '=>' in match arm");
-      const body = this.parseStatement();
-      cases.push({ pattern, guard, body });
-      this.match(TokenType.COMMA);
     }
-    this.expect(TokenType.RBRACE, "Expected '}' in match statement");
+    this.expect(TokenType.END, "Expected 'end' at end of select statement");
 
-    return { type: 'MatchStatement', discriminant, cases };
+    return { type: 'SelectStatement', discriminant, cases };
   }
 
   parsePattern() {
     const token = this.peek();
-
     if (token.value === '_') {
       this.advance();
       return { type: 'WildcardPattern' };
     }
-
     if (token.type === TokenType.NUMBER || token.type === TokenType.STRING || token.type === TokenType.BOOLEAN) {
       this.advance();
       return { type: 'LiteralPattern', value: token.value };
     }
-
     if (token.type === TokenType.IDENTIFIER) {
       const name = this.advance().value;
       if (this.match(TokenType.DOUBLE_COLON)) {
@@ -412,21 +428,10 @@ export class Parser {
       }
       return { type: 'BindingPattern', name };
     }
-
     return { type: 'WildcardPattern' };
   }
 
-  parseBlockStatement() {
-    this.expect(TokenType.LBRACE, "Expected '{'");
-    const body = [];
-    while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
-      body.push(this.parseStatement());
-    }
-    this.expect(TokenType.RBRACE, "Expected '}'");
-    return { type: 'BlockStatement', body };
-  }
-
-  // --- Expressions ---
+  // --- Expressions & Vector/Matrix Operators ---
   parseExpression() {
     return this.parseAssignment();
   }
@@ -434,22 +439,47 @@ export class Parser {
   parseAssignment() {
     let expr = this.parsePipeline();
 
-    if ([TokenType.EQ, TokenType.PLUS_EQ, TokenType.MINUS_EQ, TokenType.STAR_EQ, TokenType.SLASH_EQ].includes(this.peek().type)) {
-      const op = this.advance().value;
+    if (this.match(TokenType.EQ, TokenType.COLON_EQ, TokenType.LEFT_ARROW_EQ)) {
       const right = this.parseAssignment();
-      return { type: 'AssignmentExpression', operator: op, left: expr, right };
+      return { type: 'AssignmentExpression', left: expr, right };
     }
 
     return expr;
   }
 
   parsePipeline() {
+    let left = this.parseVectorOps();
+
+    while (this.match(TokenType.PIPELINE)) {
+      const right = this.parseVectorOps();
+      left = { type: 'PipelineExpression', left, right };
+    }
+
+    return left;
+  }
+
+  parseVectorOps() {
     let left = this.parseLogicalOr();
 
-    while (this.peek().type === TokenType.PIPELINE || this.peek().type === TokenType.PIPE_DISPATCH) {
-      this.advance();
-      const right = this.parseLogicalOr();
-      left = { type: 'PipelineExpression', left, right };
+    while (true) {
+      if (this.match(TokenType.AT_MAP)) {
+        const fn = this.parseExpression();
+        left = { type: 'VectorMapExpression', target: left, callback: fn };
+      } else if (this.match(TokenType.AT_FILTER)) {
+        const fn = this.parseExpression();
+        left = { type: 'VectorFilterExpression', target: left, callback: fn };
+      } else if (this.match(TokenType.MAT_MUL)) { // #* Matrix GEMM
+        const right = this.parseLogicalOr();
+        left = { type: 'MatrixMultiplyExpression', left, right };
+      } else if (this.match(TokenType.DOT_PROD)) { // <.> Dot product
+        const right = this.parseLogicalOr();
+        left = { type: 'DotProductExpression', left, right };
+      } else if (this.match(TokenType.CROSS_PROD)) { // <x> Cross product
+        const right = this.parseLogicalOr();
+        left = { type: 'CrossProductExpression', left, right };
+      } else {
+        break;
+      }
     }
 
     return left;
@@ -518,7 +548,7 @@ export class Parser {
   }
 
   parseUnary() {
-    const op = this.match(TokenType.NOT, TokenType.MINUS, TokenType.STAR, TokenType.AMPERSAND);
+    const op = this.match(TokenType.NOT, TokenType.MINUS);
     if (op) {
       const arg = this.parseUnary();
       return { type: 'UnaryExpression', operator: op.value, argument: arg };
@@ -533,7 +563,8 @@ export class Parser {
       if (this.match(TokenType.DOT)) {
         const prop = this.expect(TokenType.IDENTIFIER, "Expected property identifier after '.'").value;
         expr = { type: 'MemberExpression', object: expr, property: prop, computed: false };
-      } else if (this.match(TokenType.DOUBLE_COLON)) {
+      } else if (this.peek().type === TokenType.DOUBLE_COLON && this.peek(1).type === TokenType.IDENTIFIER) {
+        this.advance(); // ::
         const prop = this.expect(TokenType.IDENTIFIER, "Expected namespace identifier after '::'").value;
         expr = { type: 'NamespaceExpression', object: expr, property: prop };
       } else if (this.match(TokenType.LBRACK)) {
@@ -548,8 +579,6 @@ export class Parser {
         }
         this.expect(TokenType.RPAREN, "Expected ')' after call arguments");
         expr = { type: 'CallExpression', callee: expr, arguments: args };
-      } else if (this.match(TokenType.FORCE_UNWRAP)) {
-        expr = { type: 'ForceUnwrapExpression', argument: expr };
       } else {
         break;
       }
@@ -563,19 +592,36 @@ export class Parser {
 
     if (this.match(TokenType.NIL)) return { type: 'NilLiteral', value: null };
 
-    // Range construct 0..10
-    if (token.type === TokenType.NUMBER && this.peek(1).type === TokenType.RANGE) {
+    // Range construct 0..10 or 0..=10
+    if (token.type === TokenType.NUMBER && (this.peek(1).type === TokenType.RANGE || this.peek(1).type === TokenType.RANGE_INCL)) {
       const start = this.advance().value;
-      this.advance(); // ..
+      const isInclusive = this.peek().type === TokenType.RANGE_INCL;
+      this.advance(); // .. or ..=
       const end = this.parseExpression();
-      return { type: 'RangeLiteral', start, end };
+      return { type: 'RangeLiteral', start, end, isInclusive };
     }
 
     if (token.type === TokenType.NUMBER) { this.advance(); return { type: 'NumericLiteral', value: token.value }; }
     if (token.type === TokenType.STRING) { this.advance(); return { type: 'StringLiteral', value: token.value }; }
     if (token.type === TokenType.BOOLEAN) { this.advance(); return { type: 'BooleanLiteral', value: token.value === 'true' }; }
 
-    // Array / Vector Literal [1, 2, 3]
+    // Struct Instantiation Point@{ x: 10, y: 20 }
+    if (token.type === TokenType.IDENTIFIER && this.peek(1).type === TokenType.STRUCT_AT) {
+      const structName = this.advance().value;
+      this.advance(); // @{
+      const props = [];
+      while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
+        const key = this.expect(TokenType.IDENTIFIER, "Expected key in struct instantiation").value;
+        this.expect(TokenType.COLON, "Expected ':' after field key");
+        const val = this.parseExpression();
+        props.push({ key, value: val });
+        if (!this.match(TokenType.COMMA)) break;
+      }
+      this.expect(TokenType.RBRACE, "Expected '}' in struct instantiation");
+      return { type: 'StructLiteral', structName, properties: props };
+    }
+
+    // Array Literal [1, 2, 3]
     if (this.match(TokenType.LBRACK)) {
       const elements = [];
       while (this.peek().type !== TokenType.RBRACK && this.peek().type !== TokenType.EOF) {
@@ -586,39 +632,39 @@ export class Parser {
       return { type: 'ArrayLiteral', elements };
     }
 
-    // Zero-parameter Closure || => expr or || => { ... }
+    // Zero-param closure || => expr
     if (this.match(TokenType.OR)) {
-      this.expect(TokenType.FAT_ARROW, "Expected '=>' after '||'");
-      const body = this.peek().type === TokenType.LBRACE ? this.parseBlockStatement() : this.parseExpression();
+      this.expect(TokenType.FAT_ARROW);
+      const body = (this.peek().type === TokenType.DO || this.peek().type === TokenType.LBRACE) ? this.parseDoBlock() : this.parseExpression();
       return { type: 'ClosureExpression', params: [], body };
     }
 
-    // Lambda Closure |a, b| => expr or |a, b| => { ... }
-    if (this.match(TokenType.PIPE)) {
+    // Lambda Closure |a, b| => expr
+    if (this.match(TokenType.PIPELINE)) {
       const params = [];
-      while (this.peek().type !== TokenType.PIPE && this.peek().type !== TokenType.EOF) {
-        params.push(this.expect(TokenType.IDENTIFIER, "Expected parameter identifier in closure").value);
+      while (this.peek().type !== TokenType.PIPELINE && this.peek().type !== TokenType.EOF) {
+        params.push(this.expect(TokenType.IDENTIFIER).value);
         if (!this.match(TokenType.COMMA)) break;
       }
-      this.expect(TokenType.PIPE);
+      this.expect(TokenType.PIPELINE);
       this.expect(TokenType.FAT_ARROW);
-      const body = this.peek().type === TokenType.LBRACE ? this.parseBlockStatement() : this.parseExpression();
+      const body = (this.peek().type === TokenType.DO || this.peek().type === TokenType.LBRACE) ? this.parseDoBlock() : this.parseExpression();
       return { type: 'ClosureExpression', params, body };
     }
 
     // Parenthesized Expression
     if (this.match(TokenType.LPAREN)) {
       const expr = this.parseExpression();
-      this.expect(TokenType.RPAREN, "Expected ')'");
+      this.expect(TokenType.RPAREN);
       return expr;
     }
 
-    // Identifiers & Self
-    if (token.type === TokenType.IDENTIFIER || token.type === TokenType.SELF) {
+    // Identifier
+    if (token.type === TokenType.IDENTIFIER) {
       this.advance();
       return { type: 'Identifier', name: token.value };
     }
 
-    throw new Error(`[V0IDSKRIPT Parse Error] Unexpected primary expression token '${token.value}' (${token.type}) at ${token.line}:${token.col}`);
+    throw new Error(`[V0IDSKRIPT Parse Error] Unexpected primary token '${token.value}' (${token.type}) at ${token.line}:${token.col}`);
   }
 }

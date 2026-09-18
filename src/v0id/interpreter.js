@@ -400,7 +400,8 @@ export class V0idInterpreter {
           this.implMethods.set(node.targetName, methodMap);
         }
         for (const m of node.methods) {
-          methodMap.set(m.name, m);
+          const fnObj = this.eval(m, env);
+          methodMap.set(m.name, fnObj);
         }
         return null;
       }
@@ -499,6 +500,11 @@ export class V0idInterpreter {
 
       case 'BreakStatement': return { __break: true };
       case 'ContinueStatement': return { __continue: true };
+
+      case 'TernaryExpression': {
+        const cond = this.eval(node.condition, env);
+        return this.isTruthy(cond) ? this.eval(node.consequent, env) : this.eval(node.alternate, env);
+      }
 
       case 'AssignmentExpression': {
         const rightVal = this.eval(node.right, env);
@@ -636,6 +642,15 @@ export class V0idInterpreter {
         if (obj === null || obj === undefined) throw new Error("[V0IDSKRIPT Error] Cannot read property of nil.");
         const prop = node.computed ? this.eval(node.property, env) : node.property;
 
+        // Check if impl method on struct object
+        if (obj && obj.__structType) {
+          const typeMethods = this.implMethods.get(obj.__structType);
+          if (typeMethods && typeMethods.has(prop)) {
+            const methodFn = typeMethods.get(prop);
+            return (...args) => this.applyCallee(methodFn, [obj, ...args], env);
+          }
+        }
+
         if (Array.isArray(obj)) {
           if (prop === 'length') return obj.length;
           if (prop === 'map') return (fn) => obj.map(item => this.applyCallee(fn, [item], env));
@@ -666,6 +681,14 @@ export class V0idInterpreter {
 
       case 'RangeLiteral': {
         return { start: node.start, end: this.eval(node.end, env), isInclusive: node.isInclusive };
+      }
+
+      case 'ObjectLiteral': {
+        const obj = {};
+        for (const prop of node.properties) {
+          obj[prop.key] = this.eval(prop.value, env);
+        }
+        return obj;
       }
 
       case 'ArrayLiteral': {

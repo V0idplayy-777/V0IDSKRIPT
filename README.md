@@ -1,192 +1,113 @@
-# V0IDSKRIPT: Official Systems Language Specification & Reference Manual
-> **Document Version:** 1.0.0 (Production Release)  
-> **Status:** Standard Reference Specification  
-> **Compiler Target:** Native WASM JIT & High-Speed Bytecode Engine  
+# V0IDSKRIPT v3.0 Systems Kernel Specification & Language Reference
+> **Document Version:** 3.0.0 (Systems Kernel Specification)  
+> **Compiler Architecture:** Native WASM JIT & High-Performance Bytecode Engine  
 
 ---
 
-## 1. Architecture & Design Principles
+## 1. Architectural Design & Philosophy
 
-**V0IDSKRIPT** is a high-performance systems and application programming language engineered for mission-critical software, 2D/3D game engines, machine learning runtimes, data structures, and CLI applications. 
+**V0IDSKRIPT v3.0** is an independent, high-density systems and application programming language designed from the ground up to support high-performance game engines, neural network autograd computational graphs, data structures, and CLI software.
 
-### Core Design Pillars
-1. **Zero-Overhead Abstractions:** Traits, generics, and algebraic data types compile down to direct, contiguous memory layouts without runtime dynamic dispatch tax.
-2. **Explicit Memory & Mutability:** Variables are immutable by default (`let`). Mutability must be explicitly declared (`let mut`). Scope cleanup is guaranteed via `defer` blocks.
-3. **Comprehensive Pattern Matching:** Algebraic Enums support tuple and struct payloads with full destructuring and conditional guard clauses (`match event { Event::KeyPress(key) if key == 13 => ... }`).
-4. **Integrated 2D/3D Engine & AI Autograd:** Native stdlib support for 3D vector math (`Vec3`, `Mat4`), perspective rendering, 2D physics viewport drawing, and automatic differentiation (`std::ai::Value`).
+It features a distinct block structure grammar (`do...end`, `record...end`, `bind...end`, `spec...end`, `pass...end`), explicit variable ownership (`val`, `var`, `pin`), mode-annotated function parameters (`in`, `out`, `inout`), domain-specific matrix operators (`#*`, `<.>`, `<x>`), and vectorized parallel operators (`@map`, `@filter`, `@reduce`).
 
 ---
 
-## 2. Complete Lexical Token & Keyword Index
+## 2. Token & Grammar Reference Index
 
-V0IDSKRIPT provides an expressive keyword set designed for maximum clarity and safety.
+### 2.1 Keyword Lexicon
 
-### 2.1 Keyword Reference Table
-
-| Keyword | Description & Usage Example |
+| Keyword | Description & Syntax Structure |
 | :--- | :--- |
-| `let` | Immutable variable binding (`let x: f64 = 10.0;`) |
-| `mut` | Mutable variable binding (`let mut count = 0;`) |
-| `const` | Compile-time constant (`const MAX_FPS: i32 = 60;`) |
-| `fn` | Function declaration (`fn calculate(a: f64) -> f64 { ... }`) |
-| `struct` | Struct type definition (`struct Point { x: f64, y: f64 }`) |
-| `enum` | Algebraic data type definition (`enum State { Idle, Running(i32) }`) |
-| `trait` | Interface protocol contract (`trait Renderable { fn draw(self); }`) |
-| `impl` | Implementation block for structs or traits (`impl Renderable for Player { ... }`) |
-| `type` | Type alias declaration (`type Matrix4 = Mat4;`) |
-| `defer` | Deferred scope cleanup execution (`defer file.close();`) |
-| `match` | Pattern matching expression (`match state { State::Idle => ..., _ => ... }`) |
-| `if` / `else` | Conditional branching (`if (x > 0) { ... } else { ... }`) |
-| `while` | Conditional loop (`while (running) { ... }`) |
-| `for` / `in` | Iterator loop (`for (i in 0..100) { ... }`) |
-| `loop` | Unbounded infinite loop (`loop { if (done) break; }`) |
-| `return` | Return value from function (`return result;`) |
-| `break` / `continue` | Loop control flow statements |
-| `pub` | Public visibility modifier (`pub fn init() { ... }`) |
-| `self` / `Self` | Receiver handle in struct method implementations |
+| `val` | Immutable variable binding (`val x: f64 = 10.0;`) |
+| `var` | Mutable variable binding (`var count: i32 = 0;`) |
+| `pin` | Pinned memory buffer handle (`pin buf: Array = [1, 2, 3];`) |
+| `type` | Type definition keyword (`type Point :: record { ... }`) |
+| `record` | Record / Struct data construct (`type Point :: record { x: f64, y: f64 }`) |
+| `enum` | Algebraic Enum data construct (`type Status :: enum { Idle, Active(i32) }`) |
+| `contract` | Contract interface specification (`contract Renderable :: spec ... end`) |
+| `impl` | Implementation block for contracts or types (`impl Geometry for Sphere :: bind ... end`) |
+| `bind` | Block start keyword for contract/type implementations |
+| `fn` / `def` | Function definition keyword (`fn calc[T](in x: f64) -> f64 :: do ... end`) |
+| `in` | Immutable read-only parameter passing mode (`in param: Type`) |
+| `out` | Write-out parameter return mode (`out result: Type`) |
+| `inout` | Mutable borrow parameter mode (`inout state: State`) |
+| `do` | Universal execution block start keyword |
+| `pass` | Loop block start keyword |
+| `end` | Universal block boundary terminator |
+| `select` | Pattern matching selection statement (`select state :: case ... => ... else => ... end`) |
+| `case` | Pattern branch inside `select` statement |
+| `loop` | Loop iterator construct (`loop i in 0..100 :: pass ... end`) |
+| `while` | Conditional while loop (`while cond :: pass ... end`) |
+| `tensor` | Tensor variable declaration block |
+| `grid` | Tensor matrix grid construct (`tensor M :: grid [ 1, 2 ; 3, 4 ]`) |
 
-### 2.2 Operator & Sigil Reference Table
+### 2.2 Operator & Sigil Reference Index
 
-| Operator | Name | Usage & Description |
+| Operator | Name | Description & Usage |
 | :--- | :--- | :--- |
-| `\|>` | **Pipeline Operator** | Passes left expression as argument into right function (`x \|> transform`). |
-| `~>` | **Dispatch Pipe** | Alternative pipeline operator (`data ~> process`). |
-| `::` | **Namespace Resolution** | Resolves module/enum paths (`std::io::println`, `Status::Ready`). |
-| `->` | **Return Type Arrow** | Function return type annotation (`fn get() -> i32`). |
-| `=>` | **Fat Arrow** | Match arm expression separator (`Variant => statement`). |
-| `..` | **Range Operator** | Constructs numeric ranges (`0..100`). |
-| `??` | **Null Coalescing** | Fallback value operator for nil options (`value ?? fallback`). |
-| `?.` | **Safe Navigation** | Safely accesses properties on optional values (`obj?.prop`). |
-| `!!` | **Forced Unwrap** | Unwraps non-nil value or raises error (`option!!`). |
+| `#*` | **Matrix GEMM Multiply** | High-speed tensor dot-product matrix multiplication (`A #* B`). |
+| `<.>` | **Vector Dot Product** | Vector inner product operator (`u <.> v`). |
+| `<x>` | **Vector Cross Product** | Vector 3D cross product operator (`u <x> v`). |
+| `\|>` | **Pipeline Composition** | Pipes left expression output into right function (`x \|> transform`). |
+| `::` | **Namespace / Type Scope** | Resolves modules, types, and block bounds (`std::io::println`, `type Point :: record`). |
+| `:=` | **Signal Binding** | Binds a reactive signal variable (`signal := initial`). |
+| `@map` | **Vector Map** | Applies parallel map transform across array (`arr @map \|x\| => x * 2`). |
+| `@filter` | **Vector Filter** | Filters array using predicate function (`arr @filter \|x\| => x > 0`). |
+| `@{` | **Struct Instantiation** | Instantiates a record struct (`Point@{ x: 10, y: 20 }`). |
+| `..=` | **Inclusive Range** | Inclusive numeric range iterator (`0..=100`). |
 
 ---
 
-## 3. Type System & Memory Model
+## 3. Code Examples Across Domain Categories
 
-V0IDSKRIPT features a strong type system combining primitive scalar types, linear vector types, arrays, and algebraic data types.
-
-### 3.1 Scalar & Linear Primitives
-- **Integers:** `i8`, `i16`, `i32`, `i64` (Signed), `u8`, `u16`, `u32`, `u64` (Unsigned).
-- **Floating Point:** `f32`, `f64`.
-- **Booleans:** `bool` (`true`, `false`).
-- **Strings & Characters:** `str`, `char`.
-- **Vector & Matrix Primitives:** `Vec2`, `Vec3`, `Vec4`, `Mat4`, `Quat`.
-
-### 3.2 Structs & Trait Polymorphism
+### 3.1 Core Language: Contracts & Pattern Matching
 ```v0idskript
-struct Sphere {
-    radius: f64,
-    center: Vec3
+type Point :: record {
+    x: f64,
+    y: f64
 }
 
-trait Geometry {
-    fn volume(self) -> f64;
+contract Drawable :: spec
+    fn draw(in self)
+end
+
+impl Drawable for Point :: bind
+    fn draw(in self) :: do
+        std::io::printf("Point Location: (%.2f, %.2f)", self.x, self.y)
+    end
+end
+
+type Status :: enum {
+    Ready,
+    Running(i32)
 }
 
-impl Geometry for Sphere {
-    fn volume(self) -> f64 {
-        return (4.0 / 3.0) * std::math::PI * std::math::pow(self.radius, 3.0);
-    }
-}
+fn evaluate(in s: Status) :: do
+    select s ::
+        case Status::Ready => std::io::println("Engine Ready")
+        case Status::Running(pct) => std::io::printf("Running: %d%%", pct)
+    end
+end
 ```
 
-### 3.3 Algebraic Enums & Pattern Matching
+### 3.2 High-Performance Tensor Grid Math
 ```v0idskript
-enum GameEvent {
-    KeyPress(i32),
-    Collision(Vec3, Vec3),
-    Quit
-}
+tensor Matrix_A :: grid [
+    1.0, 2.0 ;
+    3.0, 4.0
+]
 
-fn handle_event(event: GameEvent) {
-    match event {
-        GameEvent::KeyPress(key) if key == 32 => std::io::println("Jump pressed!"),
-        GameEvent::Collision(p1, p2)         => std::io::printf("Collision detected at %s", p1),
-        GameEvent::Quit                       => std::io::println("Exiting game engine..."),
-        _                                    => std::io::println("Unhandled event.")
-    }
-}
-```
+tensor Matrix_B :: grid [
+    5.0, 6.0 ;
+    7.0, 8.0
+]
 
----
-
-## 4. 2D/3D Graphics Engine & Viewport API (`gfx::*`)
-
-V0IDSKRIPT provides built-in hardware-accelerated 2D and 3D graphics rendering primitives.
-
-| Function | Signature | Description |
-| :--- | :--- | :--- |
-| `gfx::init` | `init(w: i32, h: i32)` | Initializes the graphical canvas viewport. |
-| `gfx::clear` | `clear(color: str)` | Clears the viewport canvas background. |
-| `gfx::rect` | `rect(x, y, w, h, color, fill)` | Renders a 2D rectangle. |
-| `gfx::circle` | `circle(x, y, r, color, fill)` | Renders a 2D circle. |
-| `gfx::line` | `line(x1, y1, x2, y2, color, w)` | Draws a 2D line segment. |
-| `gfx::text` | `text(str, x, y, size, color)` | Renders text on the canvas. |
-
----
-
-## 5. Neural Autograd Engine (`std::ai::*`)
-
-V0IDSKRIPT includes an Automatic Differentiation (Autograd) scalar engine for building machine learning computational graphs.
-
-```v0idskript
-let w1 = std::ai::Value(2.0, "w1");
-let x1 = std::ai::Value(1.5, "x1");
-let b  = std::ai::Value(0.5, "b");
-
-// Forward Pass: f = (w1 * x1) + b
-let out = std::ai::relu(std::ai::add(std::ai::mul(w1, x1), b));
-
-// Backward Pass: Automatic Backpropagation Gradients
-out.backward();
-
-std::io::printf("Weight Gradient dw1: %.4f", w1.grad);
+# High-Speed GEMM Dot Product
+val Matrix_C = Matrix_A #* Matrix_B
+std::io::println("Matrix GEMM Product C (A #* B):")
+std::io::println(Matrix_C)
 ```
 
 ---
 
-## 6. Standard Library Reference (`std::*`)
-
-1. **`std::io`**: Output printing, error logs, formatted output, interactive stdin reading (`println`, `printf`, `warn`, `error`, `read_line`).
-2. **`std::math`**: Trigonometric, logarithmic, scalar, and 3D vector operations (`sin`, `cos`, `sqrt`, `pow`, `abs`, `random`, `clamp`, `vec3`, `vec3_add`, `vec3_dot`).
-3. **`std::collections`**: High-performance data structures (`HashMap`, `Queue`, `List`, `Stack`).
-4. **`std::time`**: High-precision performance profilers (`now`, `bench`).
-5. **`std::ai`**: Scalar autograd graphs (`Value`, `add`, `mul`, `relu`).
-
----
-
-## 7. Complete Application Case Studies
-
-### 7.1 Interactive Hangman CLI Game
-```v0idskript
-let secret_word = "COMPILER";
-let mut guessed_letters = [];
-let mut attempts = 6;
-
-while (attempts > 0) {
-    let guess = std::io::read_line("Guess a letter:");
-    if (!guessed_letters.includes(guess)) {
-        guessed_letters.push(guess);
-        if (!secret_word.includes(guess)) {
-            attempts -= 1;
-        }
-    }
-}
-```
-
-### 7.2 3D Perspective Software Engine
-```v0idskript
-gfx::init(800, 500);
-
-let vertices = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]];
-let edges = [[0,1], [1,2], [2,3], [3,0]];
-
-fn render_frame(angle: f64) {
-    gfx::clear("#0b0f19");
-    // Perspective transformation math
-}
-```
-
----
-
-*V0IDSKRIPT Language Specification © 2026 V0idplayy*
+*V0IDSKRIPT v3.0 Specification Manual © 2026 V0idplayy - Systems Kernel Edition.*

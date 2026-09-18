@@ -1,38 +1,54 @@
 /**
- * V0IDSKRIPT Lexer / Tokenizer
- * Industrial-grade tokenizer supporting static types, algebraic data types,
- * pattern matching, control flow, traits, and matrix/vector primitives.
+ * V0IDSKRIPT v3.0 Systems Kernel Lexer / Tokenizer
+ * Distinct syntax architecture featuring domain-specific sigils,
+ * custom block bounds (do...end, record...end, bind...end, pass...end),
+ * explicit memory passing modes (in, out, inout, own, ref), and tensor matrix operators.
  */
 
 export const TokenType = {
-  // Keywords
-  LET: 'LET',
-  MUT: 'MUT',
-  CONST: 'CONST',
-  FN: 'FN',
-  STRUCT: 'STRUCT',
-  ENUM: 'ENUM',
-  TRAIT: 'TRAIT',
-  IMPL: 'IMPL',
-  TYPE: 'TYPE',
-  DEFER: 'DEFER',
-  MATCH: 'MATCH',
-  IF: 'IF',
-  ELSE: 'ELSE',
-  WHILE: 'WHILE',
-  FOR: 'FOR',
-  IN: 'IN',
-  LOOP: 'LOOP',
-  RETURN: 'RETURN',
-  BREAK: 'BREAK',
-  CONTINUE: 'CONTINUE',
-  ASYNC: 'ASYNC',
-  AWAIT: 'AWAIT',
-  SPAWN: 'SPAWN',
-  PUB: 'PUB',
-  SELF: 'SELF',
-  REF: 'REF',
-  UNSAFE: 'UNSAFE',
+  // Declarations & Bindings
+  VAL: 'VAL',                 // Immutable variable
+  VAR: 'VAR',                 // Mutable variable
+  PIN: 'PIN',                 // Pinned memory buffer
+  CONST: 'CONST',             // Constant
+  TYPE: 'TYPE',               // Type definition
+  RECORD: 'RECORD',           // Record / Struct block
+  ENUM: 'ENUM',               // Enum block
+  CONTRACT: 'CONTRACT',       // Contract / Trait specification
+  IMPL: 'IMPL',               // Implementation block
+  BIND: 'BIND',               // Bind keyword for impl blocks
+  FN: 'FN',                   // Function definition
+  DEF: 'DEF',                 // Definition alias
+  SPEC: 'SPEC',               // Spec block
+
+  // Function Parameter Modes & Memory Ownership
+  IN: 'IN',                   // Immutable read-only param
+  OUT: 'OUT',                 // Write-out return param
+  INOUT: 'INOUT',             // Mutable borrow param
+  OWN: 'OWN',                 // Owned heap handle
+  REF: 'REF',                 // Reference handle
+  REL: 'REL',                 // Release / Free handle
+
+  // Block Boundaries & Control Flow
+  DO: 'DO',                   // Block start for functions/scopes
+  PASS: 'PASS',               // Block start for loops
+  END: 'END',                 // Universal block terminator
+  SELECT: 'SELECT',           // Match / Select control flow
+  CASE: 'CASE',               // Case branch
+  ELSE: 'ELSE',               // Default branch
+  IF: 'IF',                   // Conditional branch
+  WHILE: 'WHILE',             // While loop
+  LOOP: 'LOOP',               // Loop iterator
+  RETURN: 'RETURN',           // Return statement
+  BREAK: 'BREAK',             // Break statement
+  CONTINUE: 'CONTINUE',       // Continue statement
+  RAISE: 'RAISE',             // Exception / Error raise
+  RESCUE: 'RESCUE',           // Fault handling rescue
+  ENSURE: 'ENSURE',           // Finally block
+
+  // Domain Blocks & Tensor Matrix Primitives
+  TENSOR: 'TENSOR',           // Tensor declaration block
+  GRID: 'GRID',               // Grid matrix literal construct
 
   // Literals & Identifiers
   IDENTIFIER: 'IDENTIFIER',
@@ -41,101 +57,97 @@ export const TokenType = {
   BOOLEAN: 'BOOLEAN',
   NIL: 'NIL',
 
-  // Operators & Sigils
-  PIPE_DISPATCH: 'PIPE_DISPATCH',     // ~>
-  PIPELINE: 'PIPELINE',               // |>
-  DOUBLE_COLON: 'DOUBLE_COLON',       // ::
-  THIN_ARROW: 'THIN_ARROW',           // ->
-  FAT_ARROW: 'FAT_ARROW',             // =>
-  RANGE: 'RANGE',                     // ..
-  ELLIPSIS: 'ELLIPSIS',               // ...
-  NULL_COALESCE: 'NULL_COALESCE',     // ??
-  SAFE_NAVIGATION: 'SAFE_NAVIGATION', // ?.
-  FORCE_UNWRAP: 'FORCE_UNWRAP',       // !!
+  // Special Sigils & Multi-Character Operators
+  MAT_MUL: 'MAT_MUL',         // #* (Tensor GEMM Matrix Multiply)
+  DOT_PROD: 'DOT_PROD',       // <.> (Vector Dot Product)
+  CROSS_PROD: 'CROSS_PROD',   // <x> (Vector Cross Product)
+  PIPELINE: 'PIPELINE',       // |> (Pipeline composition)
+  DOUBLE_COLON: 'DOUBLE_COLON', // :: (Namespace / Type scope)
+  COLON_EQ: 'COLON_EQ',       // := (Signal binding)
+  LEFT_ARROW_EQ: 'LEFT_ARROW_EQ', // <== (Signal update)
+  THIN_ARROW: 'THIN_ARROW',   // -> (Return type arrow)
+  FAT_ARROW: 'FAT_ARROW',     // => (Match arm separator)
+  STRUCT_AT: 'STRUCT_AT',     // @{ (Struct literal instantiation Name@{ ... })
+  AT_MAP: 'AT_MAP',           // @map (Vectorized parallel transform)
+  AT_FILTER: 'AT_FILTER',     // @filter (Vectorized predicate filter)
+  AT_REDUCE: 'AT_REDUCE',     // @reduce (Vectorized fold reduction)
+  RANGE_INCL: 'RANGE_INCL',   // ..= (Inclusive range)
+  RANGE: 'RANGE',             // .. (Exclusive range)
 
-  // Bitwise / References
-  AMPERSAND: 'AMPERSAND',             // &
-  PIPE: 'PIPE',                       // |
-  CARET: 'CARET',                     // ^
-  TILDE: 'TILDE',                     // ~
-  SHL: 'SHL',                         // <<
-  SHR: 'SHR',                         // >>
-
-  // Arithmetic & Assignment
-  PLUS: 'PLUS',                       // +
-  MINUS: 'MINUS',                     // -
-  STAR: 'STAR',                       // *
-  SLASH: 'SLASH',                     // /
-  PERCENT: 'PERCENT',                 // %
-  EQ: 'EQ',                           // =
-  PLUS_EQ: 'PLUS_EQ',                 // +=
-  MINUS_EQ: 'MINUS_EQ',               // -=
-  STAR_EQ: 'STAR_EQ',                 // *=
-  SLASH_EQ: 'SLASH_EQ',               // /=
-  PERCENT_EQ: 'PERCENT_EQ',           // %=
-
-  // Relational & Logical
-  EQ_EQ: 'EQ_EQ',                     // ==
-  NOT_EQ: 'NOT_EQ',                   // !=
-  LT: 'LT',                           // <
-  GT: 'GT',                           // >
-  LTE: 'LTE',                         // <=
-  GTE: 'GTE',                         // >=
-  AND: 'AND',                         // &&
-  OR: 'OR',                           // ||
-  NOT: 'NOT',                         // !
+  // Standard Arithmetic & Relational
+  PLUS: 'PLUS',               // +
+  MINUS: 'MINUS',             // -
+  STAR: 'STAR',               // *
+  SLASH: 'SLASH',             // /
+  PERCENT: 'PERCENT',         // %
+  EQ: 'EQ',                   // =
+  EQ_EQ: 'EQ_EQ',             // ==
+  NOT_EQ: 'NOT_EQ',           // !=
+  LT: 'LT',                   // <
+  GT: 'GT',                   // >
+  LTE: 'LTE',                 // <=
+  GTE: 'GTE',                 // >=
+  AND: 'AND',                 // &&
+  OR: 'OR',                   // ||
+  NOT: 'NOT',                 // !
 
   // Delimiters
-  LPAREN: 'LPAREN',                   // (
-  RPAREN: 'RPAREN',                   // )
-  LBRACE: 'LBRACE',                   // {
-  RBRACE: 'RBRACE',                   // }
-  LBRACK: 'LBRACK',                   // [
-  RBRACK: 'RBRACK',                   // ]
-  COMMA: 'COMMA',                     // ,
-  DOT: 'DOT',                         // .
-  COLON: 'COLON',                     // :
-  SEMICOLON: 'SEMICOLON',             // ;
-  HASH: 'HASH',                       // #
-  AT: 'AT',                           // @
-  QUESTION: 'QUESTION',               // ?
+  LPAREN: 'LPAREN',           // (
+  RPAREN: 'RPAREN',           // )
+  LBRACE: 'LBRACE',           // {
+  RBRACE: 'RBRACE',           // }
+  LBRACK: 'LBRACK',           // [
+  RBRACK: 'RBRACK',           // ]
+  COMMA: 'COMMA',             // ,
+  DOT: 'DOT',                 // .
+  COLON: 'COLON',             // :
+  SEMICOLON: 'SEMICOLON',     // ;
+  HASH: 'HASH',               // #
+  AT: 'AT',                   // @
 
   EOF: 'EOF'
 };
 
 const KEYWORDS = {
-  'let': TokenType.LET,
-  'mut': TokenType.MUT,
+  'val': TokenType.VAL,
+  'var': TokenType.VAR,
+  'pin': TokenType.PIN,
   'const': TokenType.CONST,
-  'fn': TokenType.FN,
-  'struct': TokenType.STRUCT,
-  'enum': TokenType.ENUM,
-  'trait': TokenType.TRAIT,
-  'impl': TokenType.IMPL,
   'type': TokenType.TYPE,
-  'defer': TokenType.DEFER,
-  'match': TokenType.MATCH,
-  'if': TokenType.IF,
-  'else': TokenType.ELSE,
-  'while': TokenType.WHILE,
-  'for': TokenType.FOR,
+  'record': TokenType.RECORD,
+  'enum': TokenType.ENUM,
+  'contract': TokenType.CONTRACT,
+  'impl': TokenType.IMPL,
+  'bind': TokenType.BIND,
+  'fn': TokenType.FN,
+  'def': TokenType.DEF,
+  'spec': TokenType.SPEC,
   'in': TokenType.IN,
+  'out': TokenType.OUT,
+  'inout': TokenType.INOUT,
+  'own': TokenType.OWN,
+  'ref': TokenType.REF,
+  'rel': TokenType.REL,
+  'do': TokenType.DO,
+  'pass': TokenType.PASS,
+  'end': TokenType.END,
+  'select': TokenType.SELECT,
+  'case': TokenType.CASE,
+  'else': TokenType.ELSE,
+  'if': TokenType.IF,
+  'while': TokenType.WHILE,
   'loop': TokenType.LOOP,
   'return': TokenType.RETURN,
   'break': TokenType.BREAK,
   'continue': TokenType.CONTINUE,
-  'async': TokenType.ASYNC,
-  'await': TokenType.AWAIT,
-  'spawn': TokenType.SPAWN,
-  'pub': TokenType.PUB,
-  'self': TokenType.SELF,
-  'Self': TokenType.SELF,
-  'ref': TokenType.REF,
-  'unsafe': TokenType.UNSAFE,
+  'raise': TokenType.RAISE,
+  'rescue': TokenType.RESCUE,
+  'ensure': TokenType.ENSURE,
+  'tensor': TokenType.TENSOR,
+  'grid': TokenType.GRID,
   'true': TokenType.BOOLEAN,
   'false': TokenType.BOOLEAN,
-  'nil': TokenType.NIL,
-  'null': TokenType.NIL
+  'nil': TokenType.NIL
 };
 
 export class Lexer {
@@ -184,7 +196,13 @@ export class Lexer {
         continue;
       }
 
-      // Single line comments
+      // Single-line comments starting with # or //
+      if (ch === '#' && this.peek(1) !== '{' && this.peek(1) !== '*') {
+        while (this.pos < this.length && this.peek() !== '\n') {
+          this.advance();
+        }
+        continue;
+      }
       if (ch === '/' && this.peek(1) === '/') {
         while (this.pos < this.length && this.peek() !== '\n') {
           this.advance();
@@ -192,7 +210,7 @@ export class Lexer {
         continue;
       }
 
-      // Multi line comments
+      // Multi-line comments /* ... */
       if (ch === '/' && this.peek(1) === '*') {
         this.advance(); this.advance();
         while (this.pos < this.length && !(this.peek() === '*' && this.peek(1) === '/')) {
@@ -205,37 +223,35 @@ export class Lexer {
       const line = this.line;
       const col = this.col;
 
-      // Multi-char operators
-      if (this.match('...')) { tokens.push({ type: TokenType.ELLIPSIS, value: '...', line, col }); continue; }
-      if (this.match('..')) { tokens.push({ type: TokenType.RANGE, value: '..', line, col }); continue; }
-      if (this.match('~>')) { tokens.push({ type: TokenType.PIPE_DISPATCH, value: '~>', line, col }); continue; }
-      if (this.match('|>')) { tokens.push({ type: TokenType.PIPELINE, value: '|>', line, col }); continue; }
+      // Special Multi-Character Sigils
+      if (this.match('@map')) { tokens.push({ type: TokenType.AT_MAP, value: '@map', line, col }); continue; }
+      if (this.match('@filter')) { tokens.push({ type: TokenType.AT_FILTER, value: '@filter', line, col }); continue; }
+      if (this.match('@reduce')) { tokens.push({ type: TokenType.AT_REDUCE, value: '@reduce', line, col }); continue; }
+      if (this.match('@{')) { tokens.push({ type: TokenType.STRUCT_AT, value: '@{', line, col }); continue; }
+      if (this.match('#*')) { tokens.push({ type: TokenType.MAT_MUL, value: '#*', line, col }); continue; }
+      if (this.match('<.>')) { tokens.push({ type: TokenType.DOT_PROD, value: '<.>', line, col }); continue; }
+      if (this.match('<x>')) { tokens.push({ type: TokenType.CROSS_PROD, value: '<x>', line, col }); continue; }
       if (this.match('::')) { tokens.push({ type: TokenType.DOUBLE_COLON, value: '::', line, col }); continue; }
+      if (this.match(':=')) { tokens.push({ type: TokenType.COLON_EQ, value: ':=', line, col }); continue; }
+      if (this.match('<==')) { tokens.push({ type: TokenType.LEFT_ARROW_EQ, value: '<==', line, col }); continue; }
+      if (this.match('|>')) { tokens.push({ type: TokenType.PIPELINE, value: '|>', line, col }); continue; }
       if (this.match('->')) { tokens.push({ type: TokenType.THIN_ARROW, value: '->', line, col }); continue; }
       if (this.match('=>')) { tokens.push({ type: TokenType.FAT_ARROW, value: '=>', line, col }); continue; }
-      if (this.match('??')) { tokens.push({ type: TokenType.NULL_COALESCE, value: '??', line, col }); continue; }
-      if (this.match('?.')) { tokens.push({ type: TokenType.SAFE_NAVIGATION, value: '?.', line, col }); continue; }
-      if (this.match('!!')) { tokens.push({ type: TokenType.FORCE_UNWRAP, value: '!!', line, col }); continue; }
-      if (this.match('<<')) { tokens.push({ type: TokenType.SHL, value: '<<', line, col }); continue; }
-      if (this.match('>>')) { tokens.push({ type: TokenType.SHR, value: '>>', line, col }); continue; }
+      if (this.match('..=')) { tokens.push({ type: TokenType.RANGE_INCL, value: '..=', line, col }); continue; }
+      if (this.match('..')) { tokens.push({ type: TokenType.RANGE, value: '..', line, col }); continue; }
       if (this.match('==')) { tokens.push({ type: TokenType.EQ_EQ, value: '==', line, col }); continue; }
       if (this.match('!=')) { tokens.push({ type: TokenType.NOT_EQ, value: '!=', line, col }); continue; }
       if (this.match('<=')) { tokens.push({ type: TokenType.LTE, value: '<=', line, col }); continue; }
       if (this.match('>=')) { tokens.push({ type: TokenType.GTE, value: '>=', line, col }); continue; }
       if (this.match('&&')) { tokens.push({ type: TokenType.AND, value: '&&', line, col }); continue; }
       if (this.match('||')) { tokens.push({ type: TokenType.OR, value: '||', line, col }); continue; }
-      if (this.match('+=')) { tokens.push({ type: TokenType.PLUS_EQ, value: '+=', line, col }); continue; }
-      if (this.match('-=')) { tokens.push({ type: TokenType.MINUS_EQ, value: '-=', line, col }); continue; }
-      if (this.match('*=')) { tokens.push({ type: TokenType.STAR_EQ, value: '*=', line, col }); continue; }
-      if (this.match('/=')) { tokens.push({ type: TokenType.SLASH_EQ, value: '/=', line, col }); continue; }
-      if (this.match('%=')) { tokens.push({ type: TokenType.PERCENT_EQ, value: '%=', line, col }); continue; }
 
-      // Numbers (Hex, Float, Decimal)
+      // Numbers (Hex, Float, Integer)
       if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(this.peek(1)))) {
         let numStr = '';
         if (ch === '0' && (this.peek(1) === 'x' || this.peek(1) === 'X')) {
-          numStr += this.advance(); // 0
-          numStr += this.advance(); // x
+          numStr += this.advance();
+          numStr += this.advance();
           while (/[0-9a-fA-F_]/.test(this.peek())) {
             const d = this.advance();
             if (d !== '_') numStr += d;
@@ -249,7 +265,7 @@ export class Lexer {
           if (d !== '_') numStr += d;
         }
         if (this.peek() === '.' && /[0-9]/.test(this.peek(1))) {
-          numStr += this.advance(); // .
+          numStr += this.advance();
           while (/[0-9_]/.test(this.peek())) {
             const d = this.advance();
             if (d !== '_') numStr += d;
@@ -270,7 +286,6 @@ export class Lexer {
             if (esc === 'n') strVal += '\n';
             else if (esc === 't') strVal += '\t';
             else if (esc === 'r') strVal += '\r';
-            else if (esc === '0') strVal += '\0';
             else strVal += esc;
           } else {
             strVal += this.advance();
@@ -296,7 +311,7 @@ export class Lexer {
         continue;
       }
 
-      // Single-character punctuators & operators
+      // Single-character Punctuators
       switch (ch) {
         case '(': this.advance(); tokens.push({ type: TokenType.LPAREN, value: '(', line, col }); break;
         case ')': this.advance(); tokens.push({ type: TokenType.RPAREN, value: ')', line, col }); break;
@@ -317,15 +332,10 @@ export class Lexer {
         case '<': this.advance(); tokens.push({ type: TokenType.LT, value: '<', line, col }); break;
         case '>': this.advance(); tokens.push({ type: TokenType.GT, value: '>', line, col }); break;
         case '!': this.advance(); tokens.push({ type: TokenType.NOT, value: '!', line, col }); break;
-        case '&': this.advance(); tokens.push({ type: TokenType.AMPERSAND, value: '&', line, col }); break;
-        case '|': this.advance(); tokens.push({ type: TokenType.PIPE, value: '|', line, col }); break;
-        case '^': this.advance(); tokens.push({ type: TokenType.CARET, value: '^', line, col }); break;
-        case '~': this.advance(); tokens.push({ type: TokenType.TILDE, value: '~', line, col }); break;
-        case '#': this.advance(); tokens.push({ type: TokenType.HASH, value: '#', line, col }); break;
+        case '|': this.advance(); tokens.push({ type: TokenType.PIPELINE, value: '|', line, col }); break;
         case '@': this.advance(); tokens.push({ type: TokenType.AT, value: '@', line, col }); break;
-        case '?': this.advance(); tokens.push({ type: TokenType.QUESTION, value: '?', line, col }); break;
         default:
-          throw new Error(`[V0IDSKRIPT Lexer Error] Unexpected token character '${ch}' at ${line}:${col}`);
+          throw new Error(`[V0IDSKRIPT Lexer Error] Unexpected character '${ch}' at ${line}:${col}`);
       }
     }
 

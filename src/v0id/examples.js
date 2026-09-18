@@ -1,560 +1,541 @@
 export const EXAMPLES = [
   {
     id: '01_hello_world',
-    title: '01. Hello World & Language Primitives',
+    title: '01. Language Primitives & Contracts (v3.0)',
     category: 'Core Fundamentals',
-    description: 'Clean Hello World, traits, pattern matching, structs, algebraic data types (Enums), and closures.',
-    code: `// =========================================================
-// V0IDSKRIPT 01: LANGUAGE PRIMITIVES & TRAITS
-// =========================================================
+    description: 'Distinct V0IDSKRIPT v3.0 block bounds (do...end, record...end, bind...end), contracts, implementations, and vector operators.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 Systems Kernel Language Demo
+# =========================================================
 
-// 1. Immutable & Mutable Variable Declarations
-let message = "Hello, V0IDSKRIPT Production Compiler!";
-let mut execution_count = 1;
+std::io::println("=================================================")
+std::io::println("   V0IDSKRIPT v3.0 SYSTEMS KERNEL INITIALIZED   ")
+std::io::println("=================================================")
 
-std::io::println("=================================================");
-std::io::println(message);
-std::io::println("=================================================");
+# 1. Immutable (val) & Mutable (var) Declarations
+val system_id: str = "V0ID-KERNEL-9"
+var execution_step: i32 = 1
 
-// 2. Struct Definition & Trait Implementation
-struct Circle {
+std::io::printf("Kernel ID: %s | Step: %d", system_id, execution_step)
+
+# 2. Record Definition & Contract Implementation
+type Sphere :: record {
     radius: f64,
-    color: str
+    center: Vec3
 }
 
-trait Shape {
-    fn area(self) -> f64;
-}
+contract Geometry :: spec
+    fn volume(in self) -> f64
+end
 
-// 3. Algebraic Data Type (Enum) with Pattern Matching
-enum SystemStatus {
+impl Geometry for Sphere :: bind
+    fn volume(in self) -> f64 :: do
+        return (4.0 / 3.0) * std::math::PI * std::math::pow(self.radius, 3.0)
+    end
+end
+
+val sphere = Sphere@{ radius: 5.0, center: std::math::vec3(0.0, 0.0, 0.0) }
+std::io::printf("Sphere Radius 5.0 Volume: %.2f", sphere.volume())
+
+# 3. Algebraic Enum & Select Pattern Matching
+type Status :: enum {
     Ready,
     Processing(i32),
     Error(str)
 }
 
-fn evaluate_status(status: SystemStatus) {
-    match status {
-        SystemStatus::Ready => std::io::println("[STATUS] Engine Ready."),
-        SystemStatus::Processing(progress) => std::io::printf("[STATUS] Processing: %d%% complete.", progress),
-        SystemStatus::Error(msg) => std::io::printf("[STATUS] System Error: %s", msg)
-    }
-}
+fn handle_status(in state: Status) :: do
+    select state ::
+        case Status::Ready =>
+            std::io::println("[STATUS] Engine Core Ready.")
+        case Status::Processing(progress) =>
+            std::io::printf("[STATUS] Engine Processing: %d%%", progress)
+        case Status::Error(msg) =>
+            std::io::printf("[STATUS] Engine Fault: %s", msg)
+    end
+end
 
-evaluate_status(SystemStatus::Ready());
-evaluate_status(SystemStatus::Processing(85));
-evaluate_status(SystemStatus::Error("Buffer overflow prevented"));
+handle_status(Status::Ready())
+handle_status(Status::Processing(92))
+handle_status(Status::Error("Memory alignment boundary check passed"))
 
-// 4. Higher-Order Functional Pipelines (|>)
-let numbers = [1, 2, 3, 4, 5, 6, 7, 8];
-let sum_squared = numbers 
-    |> |arr| => arr.map(|x| => x * x)
-    |> |arr| => arr.reduce(|acc, val| => acc + val, 0);
+# 4. Vectorized Map (@map) & Pipeline (|>)
+val numbers = [1, 2, 3, 4, 5, 6, 7, 8]
+val transformed = numbers @map |x| => x * x + 10
 
-std::io::printf("Sum of Squares Pipeline Result: %d", sum_squared);
+std::io::println("Vector Mapping (@map |x| => x * x + 10):")
+std::io::println(transformed)
 `
   },
   {
     id: '02_hangman_cli_game',
-    title: '02. Interactive CLI Hangman Game',
-    category: 'CLI Application & Game',
-    description: 'A complete interactive text-based Hangman game running with real keyboard inputs, state tracking, and ASCII gallows rendering.',
-    code: `// =========================================================
-// V0IDSKRIPT 02: INTERACTIVE CLI HANGMAN GAME
-// =========================================================
+    title: '02. Interactive CLI Hangman Game (v3.0)',
+    category: 'CLI Application',
+    description: 'Interactive CLI text game written in V0IDSKRIPT v3.0 syntax with letter checking, gallows ASCII art, and state tracking.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 INTERACTIVE CLI HANGMAN GAME
+# =========================================================
 
-std::io::println("=================================================");
-std::io::println("          V0IDSKRIPT CLI HANGMAN GAME            ");
-std::io::println("=================================================");
+std::io::println("=================================================")
+std::io::println("          V0IDSKRIPT CLI HANGMAN GAME            ")
+std::io::println("=================================================")
 
-// Target Secret Words Pool
-let words = ["COMPILER", "GRAPHICS", "TENSOR", "PIPELINE", "RAYCASTER", "ALGORITHM"];
-let secret_word = "COMPILER";
-let word_length = secret_word.length;
+val secret_word = "KERNEL"
+var guessed_letters = []
+var attempts_left = 6
+var is_won = false
 
-let mut guessed_letters = [];
-let mut remaining_attempts = 6;
-let mut game_over = false;
-let mut won = false;
+fn render_gallows(in attempts: i32) :: do
+    std::io::println("\n+---+")
+    std::io::println("|   |")
+    if (attempts <= 5) :: do std::io::println("|   O") end else :: do std::io::println("|") end
+    if (attempts == 4) :: do std::io::println("|   |") end
+    else if (attempts == 3) :: do std::io::println("|  /|") end
+    else if (attempts <= 2) :: do std::io::println("|  /|\\") end
+    else :: do std::io::println("|") end
 
-fn render_gallows(attempts: i32) {
-    std::io::println("\n+---+");
-    std::io::println("|   |");
-    if (attempts <= 5) { std::io::println("|   O"); } else { std::io::println("|"); }
-    if (attempts == 4) { std::io::println("|   |"); } 
-    else if (attempts == 3) { std::io::println("|  /|"); } 
-    else if (attempts <= 2) { std::io::println("|  /|\\"); } 
-    else { std::io::println("|"); }
+    if (attempts == 1) :: do std::io::println("|  /") end
+    else if (attempts == 0) :: do std::io::println("|  / \\") end
+    else :: do std::io::println("|") end
+    std::io::println("===========")
+end
+
+fn get_masked_word(in word: str, in guessed: Array) -> str :: do
+    var masked = ""
+    loop i in 0..word.length :: pass
+        val ch = word[i]
+        if (guessed.includes(ch)) :: do
+            masked = masked + ch + " "
+        end else :: do
+            masked = masked + "_ "
+        end
+    end
+    return masked
+end
+
+val simulated_user_inputs = ["K", "E", "R", "N", "E", "L"]
+
+loop step in 0..simulated_user_inputs.length :: pass
+    if (is_won || attempts_left <= 0) :: do break; end
+
+    render_gallows(attempts_left)
+    val current_guess = simulated_user_inputs[step]
     
-    if (attempts == 1) { std::io::println("|  /"); } 
-    else if (attempts == 0) { std::io::println("|  / \\"); } 
-    else { std::io::println("|"); }
-    std::io::println("===========");
-}
+    std::io::printf("Current Word: %s", get_masked_word(secret_word, guessed_letters))
+    std::io::printf("Guessing Letter: %s", current_guess)
 
-fn get_masked_word(secret: str, guessed: Array) -> str {
-    let mut display = "";
-    for (i in secret.length) {
-        let ch = secret[i];
-        if (guessed.includes(ch)) {
-            display += ch + " ";
-        } else {
-            display += "_ ";
-        }
-    }
-    return display;
-}
+    if (!guessed_letters.includes(current_guess)) :: do
+        guessed_letters.push(current_guess)
+        if (secret_word.includes(current_guess)) :: do
+            std::io::println("-> CORRECT GUESS!")
+        end else :: do
+            attempts_left = attempts_left - 1
+            std::io::println("-> WRONG GUESS!")
+        end
+    end
 
-// Simulated Input Turn Matrix
-let simulated_guesses = ["C", "O", "M", "P", "I", "L", "E", "R"];
+    # Check Win Condition
+    var all_found = true
+    loop idx in 0..secret_word.length :: pass
+        if (!guessed_letters.includes(secret_word[idx])) :: do
+            all_found = false
+        end
+    end
 
-std::io::println("Starting game session...\n");
+    if (all_found) :: do
+        is_won = true
+    end
+end
 
-for (guess in simulated_guesses) {
-    if (game_over) { break; }
-
-    std::io::printf("-------------------------------------------------");
-    render_gallows(remaining_attempts);
-    
-    let current_masked = get_masked_word(secret_word, guessed_letters);
-    std::io::printf("Word: %s", current_masked);
-    std::io::printf("Attempts Left: %d", remaining_attempts);
-    std::io::printf("Guessing Letter: %s", guess);
-
-    if (!guessed_letters.includes(guess)) {
-        guessed_letters.push(guess);
-        if (secret_word.includes(guess)) {
-            std::io::println("-> GOOD GUESS! Correct letter!");
-        } else {
-            remaining_attempts -= 1;
-            std::io::println("-> WRONG GUESS! Lost an attempt.");
-        }
-    }
-
-    // Check Win Condition
-    let mut all_guessed = true;
-    for (i in secret_word.length) {
-        if (!guessed_letters.includes(secret_word[i])) {
-            all_guessed = false;
-        }
-    }
-
-    if (all_guessed) {
-        game_over = true;
-        won = true;
-    } else if (remaining_attempts <= 0) {
-        game_over = true;
-        won = false;
-    }
-}
-
-std::io::println("\n=================================================");
-if (won) {
-    std::io::printf("VICTORY! You guessed the word '%s' successfully!", secret_word);
-} else {
-    std::io::printf("GAME OVER! The secret word was '%s'.", secret_word);
-}
-std::io::println("=================================================");
+std::io::println("\n=================================================")
+if (is_won) :: do
+    std::io::printf("VICTORY! You solved the word '%s'!", secret_word)
+end else :: do
+    std::io::printf("GAME OVER! Secret word was '%s'.", secret_word)
+end
+std::io::println("=================================================")
 `
   },
   {
     id: '03_data_structures_bench',
-    title: '03. HashMap, Binary Trees & Sorting Benchmarks',
-    category: 'Data Structures & Algorithms',
-    description: 'Implements HashMaps, Binary Search Trees, QuickSort algorithms, and measures execution benchmark speed.',
-    code: `// =========================================================
-// V0IDSKRIPT 03: DATA STRUCTURES & ALGORITHM BENCHMARKS
-// =========================================================
+    title: '03. HashMap, Binary Search & QuickSort (v3.0)',
+    category: 'Algorithms',
+    description: 'Implements HashMaps, Binary Search Tree traversals, QuickSort algorithms, and measures execution performance.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 DATA STRUCTURES & ALGORITHM SUITE
+# =========================================================
 
-std::io::println(">>> Executing High-Performance Data Structure Benchmarks <<<");
+std::io::println(">>> Executing High-Performance Data Structure Benchmarks <<<")
 
-// 1. HashMap Test
-let map = std::collections::HashMap();
-map.insert("player_score", 9500);
-map.insert("player_level", 42);
-map.insert("player_name", "V0ID_ENGINEER");
+# 1. HashMap Test
+val map = std::collections::HashMap()
+map.insert("node_id", 1024)
+map.insert("node_name", "COMPILER_CORE")
+map.insert("active", true)
 
-std::io::printf("HashMap Key 'player_score': %d", map.get("player_score"));
-std::io::printf("HashMap Total Entries: %d", map.size());
+std::io::printf("HashMap Key 'node_id': %d", map.get("node_id"))
+std::io::printf("HashMap Total Entries: %d", map.size())
 
-// 2. Recursive QuickSort Benchmark
-fn quicksort(arr: Array) -> Array {
-    if (arr.length <= 1) { return arr; }
-    let pivot = arr[0];
-    let mut left = [];
-    let mut right = [];
+# 2. Recursive QuickSort Algorithm
+fn quicksort(in arr: Array) -> Array :: do
+    if (arr.length <= 1) :: do return arr; end
+    val pivot = arr[0]
+    var left = []
+    var right = []
 
-    for (i in 1..arr.length) {
-        if (arr[i] < pivot) {
-            left.push(arr[i]);
-        } else {
-            right.push(arr[i]);
-        }
-    }
+    loop i in 1..arr.length :: pass
+        if (arr[i] < pivot) :: do
+            left.push(arr[i])
+        end else :: do
+            right.push(arr[i])
+        end
+    end
 
-    return quicksort(left) + [pivot] + quicksort(right);
-}
+    return quicksort(left) + [pivot] + quicksort(right)
+end
 
-// Generate unsorted dataset
-let mut raw_data = [];
-for (i in 200) {
-    raw_data.push(std::math::floor(std::math::random() * 1000.0));
-}
+var raw_dataset = [42, 12, 89, 5, 23, 77, 1, 99, 34, 18, 65]
+std::io::println("Unsorted Array:")
+std::io::println(raw_dataset)
 
-std::io::printf("Unsorted Dataset Size: %d elements. First 5 sample: [%d, %d, %d, %d, %d]", 
-    raw_data.length, raw_data[0], raw_data[1], raw_data[2], raw_data[3], raw_data[4]);
+val sorted = std::time::bench("Recursive QuickSort 11 Elements", || => do
+    return quicksort(raw_dataset)
+end)
 
-// Execute QuickSort & Profile Performance
-let sorted_data = std::time::bench("Recursive QuickSort 200 Elements", || => {
-    return quicksort(raw_data);
-});
-
-std::io::printf("Sorted Sample First 5: [%d, %d, %d, %d, %d]", 
-    sorted_data[0], sorted_data[1], sorted_data[2], sorted_data[3], sorted_data[4]);
+std::io::println("Sorted QuickSort Result:")
+std::io::println(sorted)
 `
   },
   {
     id: '04_2d_breakout_game',
-    title: '04. 2D Physics Breakout Arcade Game',
+    title: '04. 2D Physics Breakout Arcade Engine (v3.0)',
     category: '2D Game Engine',
-    description: 'Interactive Breakout game with physics collision matrix, paddle movement, brick destruction, and 60 FPS canvas loop.',
-    code: `// =========================================================
-// V0IDSKRIPT 04: 2D PHYSICS BREAKOUT ARCADE GAME
-// =========================================================
+    description: '2D Breakout Arcade game written in V0IDSKRIPT v3.0 with ball bouncing physics, paddle movement, brick destruction matrix, and 60 FPS canvas loop.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 2D PHYSICS BREAKOUT ARCADE ENGINE
+# =========================================================
 
-std::io::println("Initializing 2D Physics Engine & Breakout Viewport...");
+std::io::println("Initializing 2D Physics Engine & Breakout Viewport...")
 
-gfx::init(800, 500);
+gfx::init(800, 500)
 
-let screen_w = 800;
-let screen_h = 500;
+val screen_w = 800
+val screen_h = 500
 
-// Game State
-let mut paddle_x = 350.0;
-let paddle_w = 120.0;
-let paddle_h = 16.0;
+var paddle_x = 340.0
+val paddle_w = 120.0
+val paddle_h = 16.0
 
-let mut ball_x = 400.0;
-let mut ball_y = 300.0;
-let mut ball_vx = 4.0;
-let mut ball_vy = -4.0;
-let ball_r = 8.0;
+var ball_x = 400.0
+var ball_y = 300.0
+var ball_vx = 4.0
+var ball_vy = -4.0
+val ball_r = 8.0
 
-let mut score = 0;
+var score = 0
 
-// Bricks Matrix Setup (5 rows x 8 columns)
-let rows = 4;
-let cols = 8;
-let brick_w = 85.0;
-let brick_h = 20.0;
-let mut bricks = [];
+# Bricks Setup (4 rows x 8 columns)
+val rows = 4
+val cols = 8
+val brick_w = 85.0
+val brick_h = 20.0
+var bricks = []
 
-for (r in rows) {
-    for (c in cols) {
+loop r in 0..rows :: pass
+    loop c in 0..cols :: pass
         bricks.push({
             x: 50.0 + c * 90.0,
             y: 40.0 + r * 28.0,
             active: true,
             color: r == 0 ? "#ef4444" : r == 1 ? "#f59e0b" : r == 2 ? "#10b981" : "#3b82f6"
-        });
-    }
-}
+        })
+    end
+end
 
-fn update_and_render() {
-    gfx::clear("#0b0f19");
+fn update_and_render_frame() :: do
+    gfx::clear("#0f172a")
 
-    // Draw Bricks
-    for (b in bricks) {
-        if (b.active) {
-            gfx::rect(b.x, b.y, brick_w, brick_h, b.color, true);
-            gfx::rect(b.x, b.y, brick_w, brick_h, "#1e293b", false);
+    # Render Active Bricks & Check Collisions
+    loop i in 0..bricks.length :: pass
+        val b = bricks[i]
+        if (b.active) :: do
+            gfx::rect(b.x, b.y, brick_w, brick_h, b.color, true)
+            gfx::rect(b.x, b.y, brick_w, brick_h, "#1e293b", false)
 
-            // Ball-Brick Collision Check
-            if (ball_x > b.x && ball_x < b.x + brick_w && ball_y > b.y && ball_y < b.y + brick_h) {
-                b.active = false;
-                ball_vy = -ball_vy;
-                score += 100;
-            }
-        }
-    }
+            if (ball_x > b.x && ball_x < b.x + brick_w && ball_y > b.y && ball_y < b.y + brick_h) :: do
+                b.active = false
+                ball_vy = -ball_vy
+                score = score + 100
+            end
+        end
+    end
 
-    // Ball Position Update
-    ball_x += ball_vx;
-    ball_y += ball_vy;
+    # Position Integration
+    ball_x = ball_x + ball_vx
+    ball_y = ball_y + ball_vy
 
-    // Wall Collisions
-    if (ball_x - ball_r < 0.0 || ball_x + ball_r > screen_w) { ball_vx = -ball_vx; }
-    if (ball_y - ball_r < 0.0) { ball_vy = -ball_vy; }
+    # Wall Bounce Physics
+    if (ball_x - ball_r < 0.0 || ball_x + ball_r > screen_w) :: do ball_vx = -ball_vx; end
+    if (ball_y - ball_r < 0.0) :: do ball_vy = -ball_vy; end
 
-    // Paddle Collision
-    if (ball_y + ball_r >= screen_h - 40.0 && ball_x >= paddle_x && ball_x <= paddle_x + paddle_w) {
-        ball_vy = -std::math::abs(ball_vy);
-    }
+    # Paddle Bounce Physics
+    if (ball_y + ball_r >= screen_h - 40.0 && ball_x >= paddle_x && ball_x <= paddle_x + paddle_w) :: do
+        ball_vy = -std::math::abs(ball_vy)
+    end
 
-    // Draw Paddle
-    gfx::rect(paddle_x, screen_h - 40.0, paddle_w, paddle_h, "#3b82f6", true);
+    # Draw Paddle & Ball
+    gfx::rect(paddle_x, screen_h - 40.0, paddle_w, paddle_h, "#3b82f6", true)
+    gfx::circle(ball_x, ball_y, ball_r, "#f59e0b", true)
 
-    // Draw Ball
-    gfx::circle(ball_x, ball_y, ball_r, "#f59e0b", true);
+    # Render Canvas HUD
+    gfx::text("SCORE: " + score, 20, 25, 16, "#ffffff")
+    gfx::text("V0IDSKRIPT v3.0 2D BREAKOUT PHYSICS ENGINE", 480, 25, 14, "#64748b")
+end
 
-    // Render HUD Score
-    gfx::text("SCORE: " + score, 20, 25, 16, "#ffffff");
-    gfx::text("V0IDSKRIPT 2D BREAKOUT ENGINE", 550, 25, 14, "#64748b");
-}
+loop frame in 0..5 :: pass
+    update_and_render_frame()
+end
 
-// Run 5 Game Loop Frames & Render
-for (frame in 5) {
-    update_and_render();
-}
-
-std::io::println("Breakout Game loop rendered in viewport.");
+std::io::println("Breakout 2D physics frame passes rendered successfully.")
 `
   },
   {
     id: '05_3d_software_renderer',
-    title: '05. 3D Perspective Software Engine',
-    category: '3D Graphics Engine',
-    description: '3D software graphics engine rendering rotating 3D cubes/meshes, perspective projections, vector transformations, and directional lighting.',
-    code: `// =========================================================
-// V0IDSKRIPT 05: 3D PERSPECTIVE SOFTWARE ENGINE
-// =========================================================
+    title: '05. 3D Perspective Software Engine (v3.0)',
+    category: '3D Graphics',
+    description: '3D perspective software renderer displaying rotating 3D meshes, 3D vector transformations, backface projection, and wireframe rendering.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 3D PERSPECTIVE SOFTWARE ENGINE
+# =========================================================
 
-std::io::println("Initializing 3D Perspective Graphics Engine...");
+std::io::println("Initializing 3D Perspective Software Graphics Engine...")
 
-gfx::init(800, 500);
+gfx::init(800, 500)
 
-let width = 800;
-let height = 500;
-let fov = 300.0; // Projection focal distance
+val width = 800
+val height = 500
+val fov = 300.0
 
-// 3D Cube Vertices (x, y, z)
-let vertices = [
+# 3D Cube Vertices
+val vertices = [
     [-1, -1, -1], [ 1, -1, -1], [ 1,  1, -1], [-1,  1, -1],
     [-1, -1,  1], [ 1, -1,  1], [ 1,  1,  1], [-1,  1,  1]
-];
+]
 
-// 3D Cube Edges connecting vertex indices
-let edges = [
+# 3D Cube Edges
+val edges = [
     [0,1], [1,2], [2,3], [3,0],
     [4,5], [5,6], [6,7], [7,4],
     [0,4], [1,5], [2,6], [3,7]
-];
+]
 
-fn render_3d_frame(angle_y: f64) {
-    gfx::clear("#0b0f19");
+fn render_3d_frame(in angle_y: f64) :: do
+    gfx::clear("#0f172a")
 
-    let cos_y = std::math::cos(angle_y);
-    let sin_y = std::math::sin(angle_y);
+    val cos_y = std::math::cos(angle_y)
+    val sin_y = std::math::sin(angle_y)
 
-    let mut projected_points = [];
+    var projected_points = []
 
-    // Rotate and Project 3D Vertices to 2D Screen Space
-    for (v in vertices) {
-        // Rotate around Y axis
-        let rx = v[0] * cos_y - v[2] * sin_y;
-        let ry = v[1];
-        let rz = v[0] * sin_y + v[2] * cos_y + 3.5; // Z Translation
+    # Rotate & Project 3D Vertices to 2D Canvas Screen
+    loop i in 0..vertices.length :: pass
+        val v = vertices[i]
+        val rx = v[0] * cos_y - v[2] * sin_y
+        val ry = v[1]
+        val rz = v[0] * sin_y + v[2] * cos_y + 3.5
 
-        // Perspective Projection Matrix
-        let screen_x = width / 2 + (rx * fov) / rz;
-        let screen_y = height / 2 + (ry * fov) / rz;
+        val screen_x = width / 2 + (rx * fov) / rz
+        val screen_y = height / 2 + (ry * fov) / rz
 
-        projected_points.push([screen_x, screen_y]);
-    }
+        projected_points.push([screen_x, screen_y])
+    end
 
-    // Draw Wireframe Edges
-    for (e in edges) {
-        let p1 = projected_points[e[0]];
-        let p2 = projected_points[e[1]];
-        gfx::line(p1[0], p1[1], p2[0], p2[1], "#3b82f6", 2);
-    }
+    # Render Wireframe Edges
+    loop e_idx in 0..edges.length :: pass
+        val e = edges[e_idx]
+        val p1 = projected_points[e[0]]
+        val p2 = projected_points[e[1]]
+        gfx::line(p1[0], p1[1], p2[0], p2[1], "#3b82f6", 2)
+    end
 
-    // Draw Vertices
-    for (p in projected_points) {
-        gfx::circle(p[0], p[1], 4, "#10b981", true);
-    }
+    # Render Vertex Points
+    loop p_idx in 0..projected_points.length :: pass
+        val p = projected_points[p_idx]
+        gfx::circle(p[0], p[1], 4, "#10b981", true)
+    end
 
-    gfx::text("V0IDSKRIPT 3D SOFTWARE RENDERER (ROTATING CUBE)", 20, 30, 16, "#ffffff");
-}
+    gfx::text("V0IDSKRIPT v3.0 3D PERSPECTIVE SOFTWARE ENGINE", 20, 30, 16, "#ffffff")
+end
 
-// Render rotating 3D frames
-for (f in 8) {
-    render_3d_frame(f * 0.2);
-}
+loop f in 0..8 :: pass
+    render_3d_frame(f * 0.25)
+end
 
-std::io::println("3D Perspective software render pass complete.");
+std::io::println("3D Perspective software render pass complete.")
 `
   },
   {
     id: '06_3d_fps_raycaster',
     title: '06. 3D FPS Raycasting Engine (Wolfenstein 3D)',
     category: '3D Game Engine',
-    description: '3D FPS Raycaster rendering walls with perspective height scaling, camera FOV rays, player movement, and overhead mini-map.',
-    code: `// =========================================================
-// V0IDSKRIPT 06: 3D FPS RAYCASTING ENGINE
-// =========================================================
+    description: '3D Raycaster calculating perspective wall heights, raymarching FOV vectors, camera positioning, and ceiling/floor gradient passes.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 3D FPS RAYCASTING ENGINE
+# =========================================================
 
-std::io::println("Initializing 3D Raycasting FPS Engine...");
+std::io::println("Initializing 3D FPS Raycasting Engine...")
 
-gfx::init(800, 500);
+gfx::init(800, 500)
 
-let screen_w = 800;
-let screen_h = 500;
+val screen_w = 800
+val screen_h = 500
 
-// 2D World Grid Map (1 = Wall, 0 = Empty)
-let map = [
+val map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 1, 0, 1, 0, 1],
     [1, 0, 1, 0, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1]
-];
+]
 
-let player_x = 3.5;
-let player_y = 2.5;
-let player_angle = 0.5; // Direction in radians
-let fov = 1.0; // Field of View angle
-let num_rays = 120;
+val player_x = 3.5
+val player_y = 2.5
+val player_angle = 0.5
+val fov = 1.0
+val num_rays = 120
 
-fn render_fps_view() {
-    gfx::clear("#0b0f19");
+fn render_fps_pass() :: do
+    gfx::clear("#0f172a")
 
-    // Ceiling & Floor Gradient
-    gfx::rect(0, 0, screen_w, screen_h / 2, "#1e293b", true);
-    gfx::rect(0, screen_h / 2, screen_w, screen_h / 2, "#0f172a", true);
+    # Draw Ceiling & Floor Gradient
+    gfx::rect(0, 0, screen_w, screen_h / 2, "#1e293b", true)
+    gfx::rect(0, screen_h / 2, screen_w, screen_h / 2, "#0f172a", true)
 
-    let ray_width = screen_w / num_rays;
+    val ray_width = screen_w / num_rays
 
-    // Cast Camera Rays across FOV
-    for (i in num_rays) {
-        let ray_angle = (player_angle - fov / 2.0) + (i / num_rays) * fov;
-        let mut dist = 0.0;
-        let mut hit_wall = false;
+    # Raymarch across FOV
+    loop i in 0..num_rays :: pass
+        val ray_angle = (player_angle - fov / 2.0) + (i / num_rays) * fov
+        var dist = 0.0
+        var hit_wall = false
 
-        let cos_a = std::math::cos(ray_angle);
-        let sin_a = std::math::sin(ray_angle);
+        val cos_a = std::math::cos(ray_angle)
+        val sin_a = std::math::sin(ray_angle)
 
-        // DDA Raymarch Loop
-        while (!hit_wall && dist < 12.0) {
-            dist += 0.05;
-            let check_x = std::math::floor(player_x + cos_a * dist);
-            let check_y = std::math::floor(player_y + sin_a * dist);
+        while (!hit_wall && dist < 12.0) :: pass
+            dist = dist + 0.05
+            val check_x = std::math::floor(player_x + cos_a * dist)
+            val check_y = std::math::floor(player_y + sin_a * dist)
 
-            if (check_x >= 0 && check_x < 8 && check_y >= 0 && check_y < 6) {
-                if (map[check_y][check_x] == 1) {
-                    hit_wall = true;
-                }
-            }
-        }
+            if (check_x >= 0 && check_x < 8 && check_y >= 0 && check_y < 6) :: do
+                if (map[check_y][check_x] == 1) :: do
+                    hit_wall = true
+                end
+            end
+        end
 
-        // Correct Fish-eye effect
-        let corrected_dist = dist * std::math::cos(ray_angle - player_angle);
-        let wall_height = (screen_h / corrected_dist);
+        val corrected_dist = dist * std::math::cos(ray_angle - player_angle)
+        val wall_height = (screen_h / corrected_dist)
+        val wall_top = (screen_h - wall_height) / 2.0
 
-        // Render 3D Wall Column
-        let wall_top = (screen_h - wall_height) / 2.0;
-        gfx::rect(i * ray_width, wall_top, ray_width + 1, wall_height, "#3b82f6", true);
-    }
+        gfx::rect(i * ray_width, wall_top, ray_width + 1, wall_height, "#3b82f6", true)
+    end
 
-    gfx::text("V0IDSKRIPT 3D RAYCASTING FPS ENGINE", 20, 30, 16, "#ffffff");
-}
+    gfx::text("V0IDSKRIPT v3.0 3D FPS RAYCASTING ENGINE", 20, 30, 16, "#ffffff")
+end
 
-render_fps_view();
-std::io::println("3D Raycaster viewport rendered.");
+render_fps_pass()
+std::io::println("3D Raycaster viewport pass rendered successfully.")
 `
   },
   {
-    id: '07_autograd_neural_network',
-    title: '07. Neural Autograd & Automatic Differentiation',
-    category: 'AI & Machine Learning',
-    description: 'Builds an Automatic Differentiation (Autograd) computational graph, computes backward gradients, and optimizes neural weights.',
-    code: `// =========================================================
-// V0IDSKRIPT 07: NEURAL AUTOGRAD & COMPUTATIONAL GRAPH
-// =========================================================
+    id: '07_tensor_gemm_matrix',
+    title: '07. High-Dimensional Tensor Grid Engine (v3.0)',
+    category: 'Math & Tensors',
+    description: 'High-performance Tensor GEMM matrix operations using explicit tensor grid constructs, matrix multiplies (#*), dot products (<.>), and cross products (<x>).',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 HIGH-DIMENSIONAL TENSOR GRID ENGINE
+# =========================================================
 
-std::io::println(">>> Initializing Neural Autograd Computational Engine <<<");
+std::io::println(">>> Executing Tensor Grid Matrix Math Engine <<<")
 
-// Create scalar autograd values with tracking
-let w1 = std::ai::Value(2.0, "w1");
-let x1 = std::ai::Value(1.5, "x1");
-let b = std::ai::Value(0.5, "b");
+# 1. Tensor Grid Matrix Declarations (tensor M :: grid [ ... ])
+tensor Matrix_A :: grid [
+    1.0, 2.0, 0.0, 0.5 ;
+    0.0, 1.5, 3.0, 1.0 ;
+    2.5, 0.0, 1.0, 0.0 ;
+    0.0, 1.0, 0.0, 2.0
+]
 
-// Forward Pass: f = (w1 * x1) + b
-let prod = std::ai::mul(w1, x1);
-let y_pred = std::ai::add(prod, b);
-let out = std::ai::relu(y_pred);
+tensor Matrix_B :: grid [
+    2.0, 0.0, 1.0, 0.0 ;
+    1.0, 3.0, 0.0, 1.0 ;
+    0.0, 1.0, 2.0, 0.5 ;
+    1.5, 0.0, 0.0, 1.0
+]
 
-std::io::printf("Forward Pass Output: %.4f", out.data);
+std::io::println("Tensor Matrix A (4x4):")
+std::io::println(Matrix_A)
 
-// Backward Pass: Compute automatic gradients
-out.backward();
+std::io::println("Tensor Matrix B (4x4):")
+std::io::println(Matrix_B)
 
-std::io::println("\nComputed Automatic Gradients:");
-std::io::printf("Gradient dw1: %.4f", w1.grad);
-std::io::printf("Gradient dx1: %.4f", x1.grad);
-std::io::printf("Gradient db:  %.4f", b.grad);
+# 2. Tensor GEMM Matrix Multiplication Operator (#*)
+val Matrix_C = std::time::bench("Tensor GEMM Matrix Multiply (#*)", || => do
+    return Matrix_A #* Matrix_B
+end)
 
-// Gradient Descent Step
-let learning_rate = 0.01;
-w1.data -= learning_rate * w1.grad;
-b.data -= learning_rate * b.grad;
+std::io::println("Tensor GEMM Result Matrix C (A #* B):")
+std::io::println(Matrix_C)
 
-std::io::printf("\nUpdated Weight w1: %.4f | Updated Bias b: %.4f", w1.data, b.data);
+# 3. Vector Dot Product (<.>) & Cross Product (<x>) Operators
+val v1 = std::math::vec3(1.0, 0.0, 0.0)
+val v2 = std::math::vec3(0.0, 1.0, 0.0)
+
+val dot_res = v1 <.> v2
+val cross_res = v1 <x> v2
+
+std::io::printf("Vector v1 <.> v2 Dot Product: %.2f", dot_res)
+std::io::printf("Vector v1 <x> v2 Cross Product: %s", cross_res)
 `
   },
   {
-    id: '08_ecs_game_engine',
-    title: '08. Entity Component System (ECS) Engine',
-    category: 'Architecture & Engine',
-    description: 'Executes an Entity Component System (ECS) framework running movement, spatial partitioning, and collision query systems.',
-    code: `// =========================================================
-// V0IDSKRIPT 08: ENTITY COMPONENT SYSTEM (ECS) ENGINE
-// =========================================================
+    id: '08_autograd_neural_network',
+    title: '08. Neural Autograd Computational Graph (v3.0)',
+    category: 'Machine Learning',
+    description: 'Automatic Differentiation (Autograd) scalar computational engine computing forward predictions, backward gradients, and optimizing neural weights.',
+    code: `# =========================================================
+# V0IDSKRIPT v3.0 NEURAL AUTOGRAD COMPUTATIONAL GRAPH
+# =========================================================
 
-std::io::println("Initializing Entity Component System (ECS) Engine...");
+std::io::println(">>> Initializing Neural Autograd Computational Engine <<<")
 
-let mut entities = [];
+val w1 = std::ai::Value(2.0, "w1")
+val x1 = std::ai::Value(1.5, "x1")
+val b  = std::ai::Value(0.5, "b")
 
-// Spawn 100 Entities with Position & Velocity Components
-for (i in 100) {
-    entities.push({
-        id: i,
-        pos: { x: std::math::random() * 800.0, y: std::math::random() * 500.0 },
-        vel: { x: (std::math::random() - 0.5) * 5.0, y: (std::math::random() - 0.5) * 5.0 },
-        health: 100
-    });
-}
+# Forward Pass: f = relu((w1 * x1) + b)
+val prod = std::ai::mul(w1, x1)
+val y_pred = std::ai::add(prod, b)
+val out = std::ai::relu(y_pred)
 
-// System 1: Movement System
-fn movement_system(e_list: Array) {
-    for (e in e_list) {
-        e.pos.x += e.vel.x;
-        e.pos.y += e.vel.y;
+std::io::printf("Forward Pass Output: %.4f", out.data)
 
-        if (e.pos.x < 0.0 || e.pos.x > 800.0) { e.vel.x = -e.vel.x; }
-        if (e.pos.y < 0.0 || e.pos.y > 500.0) { e.vel.y = -e.vel.y; }
-    }
-}
+# Backward Pass: Automatic Gradient Computation
+out.backward()
 
-// System 2: Render System
-gfx::init(800, 500);
+std::io::println("\nComputed Automatic Gradients:")
+std::io::printf("Gradient dw1: %.4f", w1.grad)
+std::io::printf("Gradient dx1: %.4f", x1.grad)
+std::io::printf("Gradient db:  %.4f", b.grad)
 
-fn render_system(e_list: Array) {
-    gfx::clear("#0b0f19");
-    for (e in e_list) {
-        gfx::circle(e.pos.x, e.pos.y, 4, "#3b82f6", true);
-    }
-    gfx::text("ECS ENGINE // ACTIVE ENTITIES: " + e_list.length, 20, 30, 14, "#ffffff");
-}
+# Gradient Descent Weight Update
+val learning_rate = 0.01
+w1.data = w1.data - learning_rate * w1.grad
+b.data  = b.data - learning_rate * b.grad
 
-// Run ECS Systems
-std::time::bench("ECS 100 Entities System Update Loop", || => {
-    movement_system(entities);
-    render_system(entities);
-});
-
-std::io::println("ECS System pipeline executed successfully.");
+std::io::printf("\nUpdated Weight w1: %.4f | Updated Bias b: %.4f", w1.data, b.data)
 `
   }
 ];

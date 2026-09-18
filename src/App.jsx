@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { 
-  Play, RotateCcw, BookOpen, Cpu, Terminal, Layout, Sparkles, 
-  Activity, Layers, Code, CheckCircle2, Send, Gauge, FileCode, Monitor
+  Play, RotateCcw, BookOpen, Cpu, Terminal, Layout, Gauge, FileCode, Monitor, Send, Layers
 } from 'lucide-react';
 import { Lexer } from './v0id/lexer.js';
 import { Parser } from './v0id/parser.js';
@@ -14,7 +13,7 @@ export default function App() {
   const [selectedExample, setSelectedExample] = useState(EXAMPLES[0].id);
   const [code, setCode] = useState(EXAMPLES[0].code);
   const [logs, setLogs] = useState([]);
-  const [activeTab, setActiveTab] = useState('split'); // 'split', 'console', 'viewport', 'profiler', 'ast'
+  const [activeTab, setActiveTab] = useState('split');
   const [stats, setExecutionStats] = useState({ timeMs: 0, steps: 0, status: 'IDLE' });
   const [showSpecModal, setShowSpecModal] = useState(false);
   const [astTree, setAstTree] = useState(null);
@@ -40,14 +39,9 @@ export default function App() {
     editorRef.current = editor;
   };
 
-  // Keyboard Event Listeners for 2D/3D Games
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: true }));
-    };
-    const handleKeyUp = (e) => {
-      setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
-    };
+    const handleKeyDown = (e) => setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: true }));
+    const handleKeyUp = (e) => setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
@@ -56,7 +50,6 @@ export default function App() {
     };
   }, []);
 
-  // Graphics Drawing Dispatcher
   const drawGfxCommand = (ctx, cmd) => {
     if (!ctx) return;
     switch (cmd.action) {
@@ -108,7 +101,6 @@ export default function App() {
     }
   };
 
-  // Run V0IDSKRIPT Code
   const runCode = () => {
     setLogs([]);
     setAstTree(null);
@@ -122,7 +114,6 @@ export default function App() {
     }
 
     try {
-      // Parse AST first for compiler inspector
       const lexer = new Lexer(code);
       const tokens = lexer.tokenize();
       const parser = new Parser(tokens);
@@ -166,7 +157,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-[#0f172a] text-slate-100 font-mono select-none overflow-hidden">
       
-      {/* Top Professional Header Bar */}
+      {/* Top Bar */}
       <header className="h-14 bg-[#1e293b] border-b border-[#334155] px-5 flex items-center justify-between shrink-0 shadow-md">
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 text-blue-400 font-bold">
@@ -178,13 +169,12 @@ export default function App() {
                 V0IDSKRIPT
               </span>
               <span className="text-[11px] bg-[#0f172a] text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 font-semibold">
-                v2.4.0 Production
+                v3.0 Kernel
               </span>
             </div>
           </div>
         </div>
 
-        {/* Action Controls & Preset Dropdown */}
         <div className="flex items-center space-x-3">
           <select
             value={selectedExample}
@@ -203,7 +193,7 @@ export default function App() {
             className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-4 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Run Code</span>
+            <span>Run Kernel Code</span>
           </button>
 
           <button
@@ -219,12 +209,12 @@ export default function App() {
             className="flex items-center space-x-1.5 bg-[#0f172a] hover:bg-[#1e293b] border border-blue-500/40 text-blue-400 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
           >
             <BookOpen className="w-4 h-4" />
-            <span>Language Manual</span>
+            <span>v3.0 Specification</span>
           </button>
         </div>
       </header>
 
-      {/* Main Workspace Split Layout */}
+      {/* Main Workspace Split */}
       <div className="flex flex-1 overflow-hidden">
         
         {/* Left Side: Code Editor */}
@@ -259,10 +249,10 @@ export default function App() {
             />
           </div>
 
-          {/* Keyword & Type Quick Bar */}
+          {/* Keyword & Operator Quick Bar */}
           <div className="h-9 bg-[#1e293b] border-t border-[#334155] px-3 flex items-center space-x-1.5 overflow-x-auto shrink-0 text-xs">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">Tokens:</span>
-            {['struct', 'enum', 'trait', 'impl', 'fn', 'match', '|>', '~>', 'Vec3', 'HashMap', 'std::io'].map(kw => (
+            <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">v3.0 Syntax:</span>
+            {['val', 'var', 'pin', 'fn', 'type', 'record', 'contract', 'impl', 'bind', 'do...end', 'select', 'tensor', '#*', '<.>', '@map'].map(kw => (
               <button
                 key={kw}
                 onClick={() => {
@@ -280,16 +270,15 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Side: Multitab Output Panels */}
+        {/* Right Side: Output Views */}
         <div className="w-1/2 flex flex-col bg-[#0f172a]">
           
-          {/* Navigation Tabs */}
           <div className="h-9 bg-[#1e293b] border-b border-[#334155] px-4 flex items-center justify-between shrink-0">
             <div className="flex space-x-1">
               {[
                 { id: 'split', label: 'Split View', icon: Layout },
                 { id: 'console', label: 'Terminal', icon: Terminal },
-                { id: 'viewport', label: 'Viewport Canvas', icon: Monitor },
+                { id: 'viewport', label: 'Canvas Viewport', icon: Monitor },
                 { id: 'profiler', label: 'Profiler', icon: Gauge },
                 { id: 'ast', label: 'AST Inspector', icon: Layers }
               ].map(tab => {
@@ -311,17 +300,15 @@ export default function App() {
               })}
             </div>
 
-            {/* Performance Stats */}
             <div className="flex items-center space-x-3 text-[11px] text-slate-400">
               <span className="text-emerald-400 font-bold">{stats.timeMs.toFixed(3)} ms</span>
               <span>({stats.steps} steps)</span>
             </div>
           </div>
 
-          {/* Viewport & Inspector Panel Content */}
           <div className="flex-1 flex flex-col overflow-hidden relative">
             
-            {/* 1. Viewport Canvas */}
+            {/* Viewport Canvas */}
             {(activeTab === 'split' || activeTab === 'viewport') && (
               <div className={`p-3 bg-[#0f172a] border-b border-[#334155] flex items-center justify-center ${
                 activeTab === 'split' ? 'h-1/2' : 'h-full'
@@ -340,7 +327,7 @@ export default function App() {
               </div>
             )}
 
-            {/* 2. Interactive Terminal Console */}
+            {/* Terminal Console */}
             {(activeTab === 'split' || activeTab === 'console') && (
               <div className={`flex flex-col bg-[#0f172a] font-mono text-xs overflow-hidden ${
                 activeTab === 'split' ? 'h-1/2' : 'h-full'
@@ -368,7 +355,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Interactive Terminal Stdin Input Bar */}
                 <form onSubmit={handleSendPrompt} className="p-2 bg-[#1e293b] border-t border-[#334155] flex items-center space-x-2 shrink-0">
                   <span className="text-blue-400 font-bold">$</span>
                   <input
@@ -385,28 +371,27 @@ export default function App() {
               </div>
             )}
 
-            {/* 3. Profiler Panel */}
+            {/* Profiler Tab */}
             {activeTab === 'profiler' && (
               <div className="p-6 bg-[#0f172a] text-xs space-y-4 overflow-y-auto">
-                <h3 className="text-sm font-bold text-slate-100">Performance Profiler HUD</h3>
+                <h3 className="text-sm font-bold text-slate-100">V0IDSKRIPT v3.0 Profiler</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-[#1e293b] p-4 rounded border border-[#334155]">
-                    <div className="text-slate-400 mb-1">Execution Duration</div>
+                    <div className="text-slate-400 mb-1">Execution Time</div>
                     <div className="text-xl font-bold text-emerald-400">{stats.timeMs.toFixed(3)} ms</div>
-                    <div className="text-[11px] text-slate-500 mt-1">{(stats.timeMs * 1000).toFixed(1)} microseconds</div>
                   </div>
                   <div className="bg-[#1e293b] p-4 rounded border border-[#334155]">
-                    <div className="text-slate-400 mb-1">Instructions Executed</div>
+                    <div className="text-slate-400 mb-1">Total Steps Evaluated</div>
                     <div className="text-xl font-bold text-blue-400">{stats.steps} steps</div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 4. AST Inspector Panel */}
+            {/* AST Inspector */}
             {activeTab === 'ast' && (
               <div className="p-4 bg-[#0f172a] text-xs font-mono overflow-y-auto h-full text-slate-300">
-                <h3 className="text-sm font-bold text-slate-100 mb-2">Parsed Abstract Syntax Tree (AST)</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">V0IDSKRIPT v3.0 Parsed AST</h3>
                 <pre className="bg-[#1e293b] p-3 rounded border border-[#334155] overflow-x-auto text-[11px]">
                   {JSON.stringify(astTree, null, 2)}
                 </pre>
@@ -424,7 +409,7 @@ export default function App() {
               <div className="flex items-center space-x-2">
                 <BookOpen className="w-4 h-4 text-blue-400" />
                 <h2 className="text-sm font-bold text-slate-100">
-                  V0IDSKRIPT Language Specification & Architecture Manual
+                  V0IDSKRIPT v3.0 Systems Kernel Specification Manual
                 </h2>
               </div>
               <button onClick={() => setShowSpecModal(false)} className="text-slate-400 hover:text-white font-bold px-2 py-1 cursor-pointer">
@@ -432,7 +417,7 @@ export default function App() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 text-slate-300 text-xs space-y-4 leading-relaxed">
-              <p>Full reference manual located at <code className="text-blue-400">/home/user/V0IDSKRIPT_SPEC_AND_GUIDE.md</code></p>
+              <p>Full reference specification located at <code className="text-blue-400">/home/user/V0IDSKRIPT_SPEC_AND_GUIDE.md</code></p>
             </div>
           </div>
         </div>

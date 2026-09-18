@@ -1,15 +1,15 @@
 export const EXAMPLES = [
   {
     id: '01_hello_world',
-    title: '01. Language Primitives & Contracts (v3.0)',
+    title: '01. Language Primitives & Contracts (v4.0)',
     category: 'Core Fundamentals',
-    description: 'Distinct V0IDSKRIPT v3.0 block bounds (do...end, record...end, bind...end), contracts, implementations, and vector operators.',
+    description: 'Distinct V0IDSKRIPT v4.0 block bounds (do...end, record...end, bind...end), contracts, implementations, and vector operators.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 Systems Kernel Language Demo
+# V0IDSKRIPT v4.0 Systems Kernel Language Demo
 # =========================================================
 
 std::io::println("=================================================")
-std::io::println("   V0IDSKRIPT v3.0 SYSTEMS KERNEL INITIALIZED   ")
+std::io::println("   V0IDSKRIPT v4.0 SYSTEMS KERNEL INITIALIZED   ")
 std::io::println("=================================================")
 
 # 1. Immutable (val) & Mutable (var) Declarations
@@ -25,7 +25,7 @@ type Sphere :: record {
 }
 
 contract Geometry :: spec
-    fn volume(in self) -> f64
+    fn volume(in self) -> f64;
 end
 
 impl Geometry for Sphere :: bind
@@ -69,11 +69,11 @@ std::io::println(transformed)
   },
   {
     id: '02_hangman_cli_game',
-    title: '02. Interactive CLI Hangman Game (v3.0)',
+    title: '02. Interactive CLI Hangman Game (v4.0)',
     category: 'CLI Application',
-    description: 'Interactive CLI text game written in V0IDSKRIPT v3.0 syntax with letter checking, gallows ASCII art, and state tracking.',
+    description: 'Interactive CLI text game written in V0IDSKRIPT v4.0 syntax with letter checking, gallows ASCII art, and state tracking.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 INTERACTIVE CLI HANGMAN GAME
+# V0IDSKRIPT v4.0 INTERACTIVE CLI HANGMAN GAME
 # =========================================================
 
 std::io::println("=================================================")
@@ -91,11 +91,11 @@ fn render_gallows(in attempts: i32) :: do
     if (attempts <= 5) :: do std::io::println("|   O") end else :: do std::io::println("|") end
     if (attempts == 4) :: do std::io::println("|   |") end
     else if (attempts == 3) :: do std::io::println("|  /|") end
-    else if (attempts <= 2) :: do std::io::println("|  /|\\") end
+    else if (attempts <= 2) :: do std::io::println("|  /|/") end
     else :: do std::io::println("|") end
 
     if (attempts == 1) :: do std::io::println("|  /") end
-    else if (attempts == 0) :: do std::io::println("|  / \\") end
+    else if (attempts == 0) :: do std::io::println("|  / /") end
     else :: do std::io::println("|") end
     std::io::println("===========")
 end
@@ -158,11 +158,11 @@ std::io::println("=================================================")
   },
   {
     id: '03_data_structures_bench',
-    title: '03. HashMap, Binary Search & QuickSort (v3.0)',
+    title: '03. HashMap, Binary Search & QuickSort (v4.0)',
     category: 'Algorithms',
     description: 'Implements HashMaps, Binary Search Tree traversals, QuickSort algorithms, and measures execution performance.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 DATA STRUCTURES & ALGORITHM SUITE
+# V0IDSKRIPT v4.0 DATA STRUCTURES & ALGORITHM SUITE
 # =========================================================
 
 std::io::println(">>> Executing High-Performance Data Structure Benchmarks <<<")
@@ -208,11 +208,11 @@ std::io::println(sorted)
   },
   {
     id: '04_2d_breakout_game',
-    title: '04. 2D Physics Breakout Arcade Engine (v3.0)',
+    title: '04. 2D Physics Breakout Arcade Engine (v4.0)',
     category: '2D Game Engine',
-    description: '2D Breakout Arcade game written in V0IDSKRIPT v3.0 with ball bouncing physics, paddle movement, brick destruction matrix, and 60 FPS canvas loop.',
+    description: '2D Breakout Arcade game written in V0IDSKRIPT v4.0 with ball bouncing physics, paddle movement, brick destruction matrix, and 60 FPS canvas loop.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 2D PHYSICS BREAKOUT ARCADE ENGINE
+# V0IDSKRIPT v4.0 2D PHYSICS BREAKOUT ARCADE ENGINE
 # =========================================================
 
 std::io::println("Initializing 2D Physics Engine & Breakout Viewport...")
@@ -289,7 +289,7 @@ fn update_and_render_frame() :: do
 
     # Render Canvas HUD
     gfx::text("SCORE: " + score, 20, 25, 16, "#ffffff")
-    gfx::text("V0IDSKRIPT v3.0 2D BREAKOUT PHYSICS ENGINE", 480, 25, 14, "#64748b")
+    gfx::text("V0IDSKRIPT v4.0 2D BREAKOUT PHYSICS ENGINE", 480, 25, 14, "#64748b")
 end
 
 loop frame in 0..5 :: pass
@@ -301,11 +301,11 @@ std::io::println("Breakout 2D physics frame passes rendered successfully.")
   },
   {
     id: '05_3d_software_renderer',
-    title: '05. 3D Perspective Software Engine (v3.0)',
+    title: '05. 3D Perspective Software Engine (v4.0)',
     category: '3D Graphics',
     description: '3D perspective software renderer displaying rotating 3D meshes, 3D vector transformations, backface projection, and wireframe rendering.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 3D PERSPECTIVE SOFTWARE ENGINE
+# V0IDSKRIPT v4.0 3D PERSPECTIVE SOFTWARE ENGINE
 # =========================================================
 
 std::io::println("Initializing 3D Perspective Software Graphics Engine...")
@@ -364,7 +364,7 @@ fn render_3d_frame(in angle_y: f64) :: do
         gfx::circle(p[0], p[1], 4, "#10b981", true)
     end
 
-    gfx::text("V0IDSKRIPT v3.0 3D PERSPECTIVE SOFTWARE ENGINE", 20, 30, 16, "#ffffff")
+    gfx::text("V0IDSKRIPT v4.0 3D PERSPECTIVE SOFTWARE ENGINE", 20, 30, 16, "#ffffff")
 end
 
 loop f in 0..8 :: pass
@@ -380,7 +380,7 @@ std::io::println("3D Perspective software render pass complete.")
     category: '3D Game Engine',
     description: '3D Raycaster calculating perspective wall heights, raymarching FOV vectors, camera positioning, and ceiling/floor gradient passes.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 3D FPS RAYCASTING ENGINE
+# V0IDSKRIPT v4.0 3D FPS RAYCASTING ENGINE
 # =========================================================
 
 std::io::println("Initializing 3D FPS Raycasting Engine...")
@@ -442,7 +442,7 @@ fn render_fps_pass() :: do
         gfx::rect(i * ray_width, wall_top, ray_width + 1, wall_height, "#3b82f6", true)
     end
 
-    gfx::text("V0IDSKRIPT v3.0 3D FPS RAYCASTING ENGINE", 20, 30, 16, "#ffffff")
+    gfx::text("V0IDSKRIPT v4.0 3D FPS RAYCASTING ENGINE", 20, 30, 16, "#ffffff")
 end
 
 render_fps_pass()
@@ -451,11 +451,11 @@ std::io::println("3D Raycaster viewport pass rendered successfully.")
   },
   {
     id: '07_tensor_gemm_matrix',
-    title: '07. High-Dimensional Tensor Grid Engine (v3.0)',
+    title: '07. High-Dimensional Tensor Grid Engine (v4.0)',
     category: 'Math & Tensors',
     description: 'High-performance Tensor GEMM matrix operations using explicit tensor grid constructs, matrix multiplies (#*), dot products (<.>), and cross products (<x>).',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 HIGH-DIMENSIONAL TENSOR GRID ENGINE
+# V0IDSKRIPT v4.0 HIGH-DIMENSIONAL TENSOR GRID ENGINE
 # =========================================================
 
 std::io::println(">>> Executing Tensor Grid Matrix Math Engine <<<")
@@ -502,40 +502,40 @@ std::io::printf("Vector v1 <x> v2 Cross Product: %s", cross_res)
   },
   {
     id: '08_autograd_neural_network',
-    title: '08. Neural Autograd Computational Graph (v3.0)',
+    title: '08. Neural Autograd Computational Graph (v4.0)',
     category: 'Machine Learning',
     description: 'Automatic Differentiation (Autograd) scalar computational engine computing forward predictions, backward gradients, and optimizing neural weights.',
     code: `# =========================================================
-# V0IDSKRIPT v3.0 NEURAL AUTOGRAD COMPUTATIONAL GRAPH
+# V0IDSKRIPT v4.0 NEURAL AUTOGRAD COMPUTATIONAL GRAPH
 # =========================================================
 
 std::io::println(">>> Initializing Neural Autograd Computational Engine <<<")
 
 val w1 = std::ai::Value(2.0, "w1")
 val x1 = std::ai::Value(1.5, "x1")
-val b  = std::ai::Value(0.5, "b")
+val bias = std::ai::Value(0.5, "bias")
 
-# Forward Pass: f = relu((w1 * x1) + b)
+# Forward Pass: f = relu((w1 * x1) + bias)
 val prod = std::ai::mul(w1, x1)
-val y_pred = std::ai::add(prod, b)
-val out = std::ai::relu(y_pred)
+val y_pred = std::ai::add(prod, bias)
+val result_node = std::ai::relu(y_pred)
 
-std::io::printf("Forward Pass Output: %.4f", out.data)
+std::io::printf("Forward Pass Output: %.4f", result_node.data)
 
 # Backward Pass: Automatic Gradient Computation
-out.backward()
+result_node.backward()
 
 std::io::println("\nComputed Automatic Gradients:")
-std::io::printf("Gradient dw1: %.4f", w1.grad)
-std::io::printf("Gradient dx1: %.4f", x1.grad)
-std::io::printf("Gradient db:  %.4f", b.grad)
+std::io::printf("Gradient dw1:   %.4f", w1.grad)
+std::io::printf("Gradient dx1:   %.4f", x1.grad)
+std::io::printf("Gradient dbias: %.4f", bias.grad)
 
 # Gradient Descent Weight Update
 val learning_rate = 0.01
 w1.data = w1.data - learning_rate * w1.grad
-b.data  = b.data - learning_rate * b.grad
+bias.data = bias.data - learning_rate * bias.grad
 
-std::io::printf("\nUpdated Weight w1: %.4f | Updated Bias b: %.4f", w1.data, b.data)
+std::io::printf("\nUpdated Weight w1: %.4f | Updated Bias: %.4f", w1.data, bias.data)
 `
   }
 ];

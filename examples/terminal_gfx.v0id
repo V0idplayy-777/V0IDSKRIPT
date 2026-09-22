@@ -1,0 +1,34 @@
+# =========================================================
+# V0IDSKRIPT v4.1 — graphics on the terminal
+#
+#   node v0id.js examples/terminal_gfx.v0id --gfx=ansi
+#   node v0id.js examples/terminal_gfx.v0id --gfx=png --gfx-out=./frames
+#
+# The same `gfx` commands drive the browser canvas, a 24-bit ANSI terminal
+# renderer or real PNG files — nothing about the program changes.
+# =========================================================
+
+gfx::init(320, 200)
+
+val palette = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7"]
+
+loop frame in 0..6 :: pass
+    gfx::clear("#0f172a")
+
+    # A grid of tiles that scrolls one column per frame
+    loop row in 0..5 :: pass
+        loop col in 0..8 :: pass
+            val x = 8 + col * 36 - frame * 6
+            val y = 12 + row * 34
+            val shade = palette[(row + col + frame) % 5]
+            gfx::rect(x, y, 30, 28, shade, true)
+            gfx::rect(x, y, 30, 28, "#0f172a", false)
+        end
+    end
+
+    gfx::circle(160, 100, 20 + frame * 6, "#22d3ee", false)
+    gfx::line(0, 200, 320, 0, "#64748b", 2)
+    gfx::text("V0IDSKRIPT FRAME " + frame, 10, 190, 12, "#ffffff")
+end
+
+std::io::println("Rendered 6 frames with the gfx namespace.")

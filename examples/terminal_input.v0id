@@ -1,0 +1,43 @@
+# =========================================================
+# V0IDSKRIPT v4.1 — interactive input
+#
+#   node v0id.js examples/terminal_input.v0id
+#   echo "Ada" | node v0id.js examples/terminal_input.v0id --gfx=none
+#
+# std::io::read_line really waits for a line, and input::is_key_pressed
+# reports real key presses when stdin is a terminal.
+# =========================================================
+
+std::io::println("=== V0IDSKRIPT v4.1 interactive input demo ===")
+
+# 1. Blocking line input (works on a TTY and with piped stdin)
+val name = std::io::read_line("What is your name? ")
+std::io::println("Hello, " + name + "!")
+
+val age = std::io::read_number("How old are you? ")
+std::io::println("Next year you will be " + (age + 1) + ".")
+
+# 2. Typed input: the annotation is checked at runtime
+val favourite: i32 = std::io::read_number("Favourite integer? ")
+std::io::println("Twice that is " + (favourite * 2) + ".")
+
+# 3. Keyboard state (hold a key down while the loop runs on a TTY)
+std::io::println("Press keys for two seconds (arrows, letters, space)...")
+var pressed = []
+var ticks = 0
+while (ticks < 40) :: pass
+    if (input::is_key_pressed("up"))    :: do pressed.push("up")    end
+    if (input::is_key_pressed("down"))  :: do pressed.push("down")  end
+    if (input::is_key_pressed("left"))  :: do pressed.push("left")  end
+    if (input::is_key_pressed("right")) :: do pressed.push("right") end
+    if (input::is_key_pressed("space")) :: do pressed.push("space") end
+    if (input::is_key_pressed("a"))     :: do pressed.push("a")     end
+    ticks = ticks + 1
+end
+
+std::io::println("Captured " + pressed.length + " key samples.")
+if (pressed.length > 0) :: do
+    std::io::println("Sample: " + pressed[0])
+end else :: do
+    std::io::println("(no TTY attached — keyboard state stays false)")
+end

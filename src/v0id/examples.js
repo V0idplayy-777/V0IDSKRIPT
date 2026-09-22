@@ -537,5 +537,121 @@ bias.data = bias.data - learning_rate * bias.grad
 
 std::io::printf("\nUpdated Weight w1: %.4f | Updated Bias: %.4f", w1.data, bias.data)
 `
+  },
+  {
+    id: '09_types_contracts_modes',
+    title: '09. Type Checking, Contracts & Memory Modes (v4.1)',
+    category: 'Type System',
+    description: 'Runtime type enforcement, contract verification on impl blocks, and the real semantics of in / out / inout / own / ref parameters.',
+    code: `# =========================================================
+# V0IDSKRIPT v4.1 TYPES, CONTRACTS & MEMORY MODES
+# =========================================================
+
+std::io::println(">>> Type Enforcement, Contracts & Parameter Modes <<<")
+
+# 1. Type annotations are checked while the program runs
+val max_hp: i32 = 100
+var hp: f64 = 100.0
+std::io::printf("HP: %.2f / %d", hp, max_hp)
+# hp = "full"   <- uncomment to see a Type Error
+
+# 2. Records, contracts and verified implementations
+type Enemy :: record {
+    name: str,
+    hp: f64,
+    damage: f64
+}
+
+contract Damageable :: spec
+    fn take_damage(inout self, in amount: f64) -> f64;
+    fn alive(in self) -> bool;
+end
+
+# Remove either method (or change a mode/type) and this impl block is rejected.
+impl Damageable for Enemy :: bind
+    fn take_damage(inout self, in amount: f64) -> f64 :: do
+        self.hp = self.hp - amount
+        return self.hp
+    end
+
+    fn alive(in self) -> bool :: do
+        return self.hp > 0.0
+    end
+end
+
+var goblin = Enemy@{ name: "goblin", hp: 30.0, damage: 4.5 }
+std::io::printf("%s takes 12.0 damage -> %.2f hp left", goblin.name, goblin.take_damage(12.0))
+std::io::println("still alive:", goblin.alive())
+
+# 3. Contracts can be used as parameter types
+fn fight(inout target: Damageable, in amount: f64) -> bool :: do
+    target.take_damage(amount)
+    return target.alive()
+end
+
+std::io::println("survived a 25.0 hit:", fight(goblin, 25.0))
+
+# 4. out parameters are written back into the caller's variables
+fn split(out whole: i32, out frac: f64, in value: f64) :: do
+    whole = std::math::floor(value)
+    frac = value - whole
+end
+
+var whole_part = 0
+var frac_part = 0.0
+split(whole_part, frac_part, 3.75)
+std::io::printf("3.75 splits into %d and %.2f", whole_part, frac_part)
+
+# 5. ref aliases the caller's storage, own receives a private deep copy
+fn heal(ref target: f64, in amount: f64) :: do
+    target = target + amount
+end
+
+heal(goblin.hp, 10.0)
+std::io::printf("healed through 'ref' -> %.2f hp", goblin.hp)
+
+fn corrupt(own data: Array) :: do
+    data.push("CORRUPTED")
+    std::io::println("inside 'own':", data)
+end
+
+val payload = ["alpha", "beta"]
+corrupt(payload)
+std::io::println("caller value untouched by 'own':", payload)
+`
+  },
+  {
+    id: '10_reduce_interactive_io',
+    title: '10. @reduce & Interactive Input (v4.1) — type in the console',
+    category: 'Pipelines & I/O',
+    description: '@reduce folds a vector with an initial accumulator, and std::io::read_line suspends the program until a line is submitted in the console input box.',
+    code: `# =========================================================
+# V0IDSKRIPT v4.1 VECTOR REDUCTION & INTERACTIVE INPUT
+# =========================================================
+
+std::io::println(">>> @reduce Operator & Blocking Console Input <<<")
+
+val readings = [12.5, 8.0, 21.25, 4.0]
+
+# @reduce |accumulator, item| => expression, initial
+val total = readings @reduce |acc, x| => acc + x, 0.0
+val count = readings @reduce |acc, x| => acc + 1, 0
+val peak  = readings @reduce |acc, x| => x > acc ? x : acc, 0.0
+
+std::io::printf("Sensor total:  %.2f", total)
+std::io::printf("Sample count:  %d", count)
+std::io::printf("Average:       %.2f", total / count)
+std::io::printf("Peak reading:  %.2f", peak)
+
+# Pipelines compose with the vectorised operators
+val scaled = readings @map |x| => x / peak
+val normalised = scaled @filter |x| => x > 0.25
+std::io::println("Normalised readings above 0.25:")
+std::io::println(normalised)
+
+# read_line really waits: type a line into the console input box below
+val operator = std::io::read_line("Operator name? ")
+std::io::println("Welcome, " + operator + "! Session logged.")
+`
   }
 ];

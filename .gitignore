@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.vite/
+
+# Frames rendered by the CLI graphics backend
+v0id_gfx_out/
+
+# Local scratch files
+*.log
+.DS_Store

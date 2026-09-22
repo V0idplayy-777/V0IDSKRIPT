@@ -4,6 +4,35 @@ export class Parser {
   constructor(tokens) {
     this.tokens = tokens;
     this.pos = 0;
+    /**
+     * While a `@map` / `@filter` / `@reduce` callback is being parsed the
+     * vectorised operators are suspended, so `xs @filter |x| => x > 1 @map f`
+     * chains left to right instead of swallowing the next operator into the
+     * callback. Parenthesised, bracketed and block expressions restore them.
+     */
+    this.noVectorOps = false;
+  }
+
+  /** Run `fn` with the vectorised operators disabled. */
+  withoutVectorOps(fn) {
+    const previous = this.noVectorOps;
+    this.noVectorOps = true;
+    try {
+      return fn();
+    } finally {
+      this.noVectorOps = previous;
+    }
+  }
+
+  /** Run `fn` with the vectorised operators re-enabled (nested scopes). */
+  withVectorOps(fn) {
+    const previous = this.noVectorOps;
+    this.noVectorOps = false;
+    try {
+      return fn();
+    } finally {
+      this.noVectorOps = previous;
+    }
   }
 
   peek(offset = 0) {
@@ -37,7 +66,9 @@ export class Parser {
 
   expectIdentifier(errorMsg) {
     const token = this.peek();
-    if (token.type === TokenType.IDENTIFIER || [TokenType.OUT, TokenType.IN, TokenType.REF, TokenType.OWN, TokenType.PIN].includes(token.type)) {
+    if (token.type === TokenType.IDENTIFIER || [
+      TokenType.OUT, TokenType.IN, TokenType.REF, TokenType.OWN, TokenType.PIN, TokenType.FN, TokenType.DEF
+    ].includes(token.type)) {
       this.pos++;
       return token;
     }
@@ -149,6 +180,7 @@ export class Parser {
 
   parseTypeAnnotation() {
     let name = this.expectIdentifier("Expected type name").value;
+    let suffix = '';
     if (this.match(TokenType.LT)) {
       const typeParams = [];
       while (this.peek().type !== TokenType.GT && this.peek().type !== TokenType.EOF) {
@@ -156,9 +188,12 @@ export class Parser {
         if (!this.match(TokenType.COMMA)) break;
       }
       this.expect(TokenType.GT, "Expected '>' in type parameter");
-      return `${name}<${typeParams.join(', ')}>`;
+      suffix = `<${typeParams.join(', ')}>`;
     }
-    return name;
+    // Trailing `?` marks the type as nullable (nil is accepted as well).
+    let nullable = '';
+    while (this.match(TokenType.QUESTION)) nullable += '?';
+    return `${name}${suffix}${nullable}`;
   }
 
   parseFunctionDecl() {
@@ -179,9 +214,12 @@ export class Parser {
     this.expect(TokenType.LPAREN, "Expected '(' after function name");
     const params = [];
     while (this.peek().type !== TokenType.RPAREN && this.peek().type !== TokenType.EOF) {
+      // Memory passing modes: in (default) | out | inout | own | ref
       let mode = 'in';
       if (this.match(TokenType.INOUT)) mode = 'inout';
       else if (this.match(TokenType.OUT)) mode = 'out';
+      else if (this.match(TokenType.OWN)) mode = 'own';
+      else if (this.match(TokenType.REF)) mode = 'ref';
       else this.match(TokenType.IN);
 
       const pName = this.expectIdentifier("Expected parameter name").value;
@@ -488,13 +526,21 @@ export class Parser {
   parseVectorOps() {
     let left = this.parseLogicalOr();
 
-    while (true) {
+    while (!this.noVectorOps) {
       if (this.match(TokenType.AT_MAP)) {
-        const fn = this.parseExpression();
+        const fn = this.withoutVectorOps(() => this.parseExpression());
         left = { type: 'VectorMapExpression', target: left, callback: fn };
       } else if (this.match(TokenType.AT_FILTER)) {
-        const fn = this.parseExpression();
+        const fn = this.withoutVectorOps(() => this.parseExpression());
         left = { type: 'VectorFilterExpression', target: left, callback: fn };
+      } else if (this.match(TokenType.AT_REDUCE)) {
+        // values @reduce |acc, x| => acc + x, initial
+        const fn = this.withoutVectorOps(() => this.parseExpression());
+        let initial = null;
+        if (this.match(TokenType.COMMA)) {
+          initial = this.withoutVectorOps(() => this.parseExpression());
+        }
+        left = { type: 'VectorReduceExpression', target: left, callback: fn, initial };
       } else if (this.match(TokenType.MAT_MUL)) {
         const right = this.parseLogicalOr();
         left = { type: 'MatrixMultiplyExpression', left, right };
@@ -595,13 +641,13 @@ export class Parser {
         const prop = this.expectIdentifier("Expected namespace identifier after '::'").value;
         expr = { type: 'NamespaceExpression', object: expr, property: prop };
       } else if (this.match(TokenType.LBRACK)) {
-        const index = this.parseExpression();
+        const index = this.withVectorOps(() => this.parseExpression());
         this.expect(TokenType.RBRACK, "Expected ']' after index");
         expr = { type: 'MemberExpression', object: expr, property: index, computed: true };
       } else if (this.match(TokenType.LPAREN)) {
         const args = [];
         while (this.peek().type !== TokenType.RPAREN && this.peek().type !== TokenType.EOF) {
-          args.push(this.parseExpression());
+          args.push(this.withVectorOps(() => this.parseExpression()));
           if (!this.match(TokenType.COMMA)) break;
         }
         this.expect(TokenType.RPAREN, "Expected ')' after call arguments");
@@ -654,7 +700,7 @@ export class Parser {
       while (this.peek().type !== TokenType.RBRACE && this.peek().type !== TokenType.EOF) {
         const key = this.expectIdentifier("Expected key in object literal").value;
         this.expect(TokenType.COLON, "Expected ':' after key in object literal");
-        const val = this.parseExpression();
+        const val = this.withVectorOps(() => this.parseExpression());
         props.push({ key, value: val });
         if (!this.match(TokenType.COMMA)) break;
       }
@@ -666,7 +712,7 @@ export class Parser {
     if (this.match(TokenType.LBRACK)) {
       const elements = [];
       while (this.peek().type !== TokenType.RBRACK && this.peek().type !== TokenType.EOF) {
-        elements.push(this.parseExpression());
+        elements.push(this.withVectorOps(() => this.parseExpression()));
         if (!this.match(TokenType.COMMA)) break;
       }
       this.expect(TokenType.RBRACK, "Expected ']' in array literal");
@@ -695,8 +741,8 @@ export class Parser {
 
     // Parenthesized Expression
     if (this.match(TokenType.LPAREN)) {
-      const expr = this.parseExpression();
-      this.expect(TokenType.RPAREN);
+      const expr = this.withVectorOps(() => this.parseExpression());
+      this.expect(TokenType.RPAREN, "Expected ')' after expression");
       return expr;
     }
 

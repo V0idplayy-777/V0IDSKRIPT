@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { 
-  Play, RotateCcw, BookOpen, Cpu, Terminal, Layout, Gauge, FileCode, Monitor, Send, Layers
+  Play, RotateCcw, BookOpen, Cpu, Terminal, Layout, Gauge, FileCode, Monitor, Send, Layers,
+  Square, Keyboard
 } from 'lucide-react';
 import { Lexer } from './v0id/lexer.js';
 import { Parser } from './v0id/parser.js';
-import { V0idInterpreter } from './v0id/interpreter.js';
+import { V0idInterpreter, DEFAULT_LIMITS } from './v0id/interpreter.js';
 import { registerV0idLanguage } from './v0id/monaco-v0id.js';
 import { EXAMPLES } from './v0id/examples.js';
+
+let logIdCounter = 0;
+const nextLogId = () => `${Date.now()}-${logIdCounter++}`;
 
 export default function App() {
   const [selectedExample, setSelectedExample] = useState(EXAMPLES[0].id);
@@ -18,10 +22,28 @@ export default function App() {
   const [showSpecModal, setShowSpecModal] = useState(false);
   const [astTree, setAstTree] = useState(null);
   const [promptInput, setPromptInput] = useState('');
-  const [keyStates, setKeyStates] = useState({});
+  const [isRunning, setIsRunning] = useState(false);
+  const [awaitingInput, setAwaitingInput] = useState(false);
 
   const canvasRef = useRef(null);
   const editorRef = useRef(null);
+  const interpreterRef = useRef(null);
+  const promptResolverRef = useRef(null);
+  // Live input state (mutated in place so a running program sees updates).
+  const keyStatesRef = useRef({});
+  const mouseStateRef = useRef({ x: 0, y: 0, isDown: false });
+  const mouseLabelRef = useRef(null);
+
+  const pushLog = useCallback((msg) => {
+    setLogs(prev => {
+      const last = prev[prev.length - 1];
+      // `print` (newline: false) continues the previous line, like a terminal.
+      if (msg.newline === false && last && last.pending) {
+        return [...prev.slice(0, -1), { ...last, text: last.text + msg.text }];
+      }
+      return [...prev, { ...msg, id: nextLogId(), pending: msg.newline === false }];
+    });
+  }, []);
 
   const handleSelectExample = (id) => {
     const ex = EXAMPLES.find(e => e.id === id);
@@ -40,13 +62,22 @@ export default function App() {
   };
 
   useEffect(() => {
-    const handleKeyDown = (e) => setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: true }));
-    const handleKeyUp = (e) => setKeyStates(prev => ({ ...prev, [e.key.toLowerCase()]: false }));
+    const normalize = (key) => {
+      const k = String(key).toLowerCase();
+      if (k === ' ') return 'space';
+      if (k.startsWith('arrow')) return k.slice(5);
+      return k;
+    };
+    const handleKeyDown = (e) => { keyStatesRef.current[normalize(e.key)] = true; };
+    const handleKeyUp = (e) => { keyStatesRef.current[normalize(e.key)] = false; };
+    const handleBlur = () => { keyStatesRef.current = {}; };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
     };
   }, []);
 
@@ -101,9 +132,17 @@ export default function App() {
     }
   };
 
-  const runCode = () => {
+  const runCode = async () => {
+    // Abort anything still running (including programs waiting on read_line).
+    if (interpreterRef.current) interpreterRef.current.abort();
+    if (promptResolverRef.current) {
+      promptResolverRef.current(null);
+      promptResolverRef.current = null;
+    }
+
     setLogs([]);
     setAstTree(null);
+    setAwaitingInput(false);
 
     const canvas = canvasRef.current;
     let ctx = null;
@@ -113,6 +152,7 @@ export default function App() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
+    let interpreter;
     try {
       const lexer = new Lexer(code);
       const tokens = lexer.tokenize();
@@ -120,38 +160,86 @@ export default function App() {
       const ast = parser.parseProgram();
       setAstTree(ast);
 
-      const interpreter = new V0idInterpreter({
-        onLog: (msg) => {
-          setLogs(prev => [...prev, { ...msg, id: Date.now() + Math.random() }]);
-        },
+      interpreter = new V0idInterpreter({
+        onLog: pushLog,
         onGfxDraw: (cmd) => {
           if (ctx) drawGfxCommand(ctx, cmd);
         },
-        keyStates
+        // `std::io::read_line` suspends here until the console submits a line.
+        onPromptInput: () => new Promise((resolve) => {
+          promptResolverRef.current = resolve;
+          setAwaitingInput(true);
+        }),
+        keyStates: keyStatesRef.current,
+        mouseState: mouseStateRef.current
       });
+      interpreterRef.current = interpreter;
 
       setExecutionStats({ timeMs: 0, steps: 0, status: 'RUNNING' });
-      const res = interpreter.run(code);
+      setIsRunning(true);
+      const res = await interpreter.run(code);
       setExecutionStats({
         timeMs: res.executionTimeMs,
         steps: res.totalSteps,
         status: 'SUCCESS'
       });
     } catch (err) {
-      setExecutionStats({ timeMs: 0, steps: 0, status: 'ERROR' });
-      setLogs(prev => [...prev, { type: 'error', text: err.message, id: Date.now() }]);
+      if (err && err.isAbort) {
+        setExecutionStats({ timeMs: 0, steps: 0, status: 'ABORTED' });
+        pushLog({ type: 'warn', text: err.message });
+      } else {
+        setExecutionStats({ timeMs: 0, steps: 0, status: 'ERROR' });
+        pushLog({ type: 'error', text: err.message });
+      }
+    } finally {
+      if (interpreterRef.current === interpreter) interpreterRef.current = null;
+      setIsRunning(false);
+      setAwaitingInput(false);
+      promptResolverRef.current = null;
     }
+  };
+
+  const stopCode = () => {
+    if (interpreterRef.current) interpreterRef.current.abort('Execution stopped by user.');
+    if (promptResolverRef.current) {
+      promptResolverRef.current(null);
+      promptResolverRef.current = null;
+    }
+    setAwaitingInput(false);
   };
 
   const handleSendPrompt = (e) => {
     e.preventDefault();
-    if (!promptInput.trim()) return;
-    setLogs(prev => [...prev, { type: 'stdout', text: `> ${promptInput}`, id: Date.now() }]);
+    const text = promptInput;
+    if (!text.trim() && !promptResolverRef.current) return;
     setPromptInput('');
+
+    const resolver = promptResolverRef.current;
+    if (resolver) {
+      promptResolverRef.current = null;
+      setAwaitingInput(false);
+      pushLog({ type: 'stdin', text });
+      resolver(text);
+    } else {
+      pushLog({ type: 'stdout', text: `> ${text}` });
+    }
+  };
+
+  const handleCanvasMouse = (event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    mouseStateRef.current.x = Math.round(((event.clientX - rect.left) / rect.width) * canvas.width);
+    mouseStateRef.current.y = Math.round(((event.clientY - rect.top) / rect.height) * canvas.height);
+    // Written straight into the DOM: moving the mouse must not re-render React.
+    if (mouseLabelRef.current) {
+      mouseLabelRef.current.textContent = `mouse: ${mouseStateRef.current.x},${mouseStateRef.current.y}`;
+    }
   };
 
   useEffect(() => {
     runCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -169,7 +257,7 @@ export default function App() {
                 V0IDSKRIPT
               </span>
               <span className="text-[11px] bg-[#0f172a] text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 font-semibold">
-                v3.0 Kernel
+                v4.1 Kernel
               </span>
             </div>
           </div>
@@ -197,6 +285,20 @@ export default function App() {
           </button>
 
           <button
+            onClick={stopCode}
+            disabled={!isRunning}
+            className={`flex items-center space-x-1.5 font-semibold text-xs px-3 py-1.5 rounded-lg border transition-all ${
+              isRunning
+                ? 'bg-rose-600/20 border-rose-500/50 text-rose-300 hover:bg-rose-600/40 cursor-pointer'
+                : 'bg-[#0f172a] border-[#334155] text-slate-500 cursor-not-allowed'
+            }`}
+            title="Stop a running program (also cancels a pending read_line)"
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span>Stop</span>
+          </button>
+
+          <button
             onClick={() => setLogs([])}
             className="p-1.5 bg-[#0f172a] hover:bg-[#1e293b] border border-[#334155] rounded-lg text-slate-300 transition-all cursor-pointer"
             title="Clear Terminal Output"
@@ -209,7 +311,7 @@ export default function App() {
             className="flex items-center space-x-1.5 bg-[#0f172a] hover:bg-[#1e293b] border border-blue-500/40 text-blue-400 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all cursor-pointer"
           >
             <BookOpen className="w-4 h-4" />
-            <span>v3.0 Specification</span>
+            <span>v4.1 Specification</span>
           </button>
         </div>
       </header>
@@ -251,8 +353,8 @@ export default function App() {
 
           {/* Keyword & Operator Quick Bar */}
           <div className="h-9 bg-[#1e293b] border-t border-[#334155] px-3 flex items-center space-x-1.5 overflow-x-auto shrink-0 text-xs">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">v3.0 Syntax:</span>
-            {['val', 'var', 'pin', 'fn', 'type', 'record', 'contract', 'impl', 'bind', 'do...end', 'select', 'tensor', '#*', '<.>', '@map'].map(kw => (
+            <span className="text-[10px] text-slate-400 font-semibold uppercase mr-1">v4.1 Syntax:</span>
+            {['val', 'var', 'pin', 'fn', 'type', 'record', 'contract', 'impl', 'bind', 'do...end', 'select', 'tensor', '#*', '<.>', '@map', '@reduce', 'out', 'inout'].map(kw => (
               <button
                 key={kw}
                 onClick={() => {
@@ -319,9 +421,19 @@ export default function App() {
                     width={800}
                     height={500}
                     className="w-[580px] h-[300px] object-contain block bg-[#0f172a]"
+                    onMouseMove={handleCanvasMouse}
+                    onMouseDown={(e) => { mouseStateRef.current.isDown = true; handleCanvasMouse(e); }}
+                    onMouseUp={() => { mouseStateRef.current.isDown = false; }}
+                    onMouseLeave={() => { mouseStateRef.current.isDown = false; }}
                   />
                   <div className="absolute top-2 left-2 bg-[#1e293b]/90 px-2 py-0.5 rounded text-[10px] text-blue-400 border border-[#334155]">
                     2D/3D Viewport Canvas
+                  </div>
+                  <div
+                    ref={mouseLabelRef}
+                    className="absolute top-2 right-2 bg-[#1e293b]/90 px-2 py-0.5 rounded text-[10px] text-slate-400 border border-[#334155]"
+                  >
+                    mouse: 0,0
                   </div>
                 </div>
               </div>
@@ -345,25 +457,38 @@ export default function App() {
                           log.type === 'warn' ? 'bg-amber-950 text-amber-400' :
                           log.type === 'error' ? 'bg-rose-950 text-rose-400' :
                           log.type === 'bench' ? 'bg-emerald-950 text-emerald-400' :
+                          log.type === 'stdin' ? 'bg-blue-950 text-blue-300' :
                           'bg-[#1e293b] text-slate-400'
                         }`}>
-                          {log.type === 'warn' ? '[WARN]' : log.type === 'error' ? '[ERROR]' : log.type === 'bench' ? '[BENCH]' : '[STDOUT]'}
+                          {log.type === 'warn' ? '[WARN]' : log.type === 'error' ? '[ERROR]' : log.type === 'bench' ? '[BENCH]' : log.type === 'stdin' ? '[STDIN]' : '[STDOUT]'}
                         </span>
-                        <span className="text-slate-200 break-all whitespace-pre-wrap">{log.text}</span>
+                        <span className={`break-all whitespace-pre-wrap ${
+                          log.type === 'stdin' ? 'text-blue-300' : 'text-slate-200'
+                        }`}>{log.text}</span>
                       </div>
                     ))
                   )}
                 </div>
 
                 <form onSubmit={handleSendPrompt} className="p-2 bg-[#1e293b] border-t border-[#334155] flex items-center space-x-2 shrink-0">
-                  <span className="text-blue-400 font-bold">$</span>
+                  <span className={`font-bold ${awaitingInput ? 'text-emerald-400' : 'text-blue-400'}`}>
+                    {awaitingInput ? '?' : '$'}
+                  </span>
                   <input
                     type="text"
                     value={promptInput}
                     onChange={(e) => setPromptInput(e.target.value)}
-                    placeholder="Interactive input console..."
-                    className="flex-1 bg-[#0f172a] text-xs text-slate-100 border border-[#334155] rounded px-2.5 py-1 focus:outline-none focus:border-blue-500"
+                    placeholder={awaitingInput ? 'Program is waiting for read_line — type and press Enter' : 'Interactive input console (read_line reads from here)'}
+                    className={`flex-1 bg-[#0f172a] text-xs text-slate-100 border rounded px-2.5 py-1 focus:outline-none ${
+                      awaitingInput ? 'border-emerald-500 focus:border-emerald-400' : 'border-[#334155] focus:border-blue-500'
+                    }`}
                   />
+                  {awaitingInput && (
+                    <span className="flex items-center space-x-1 text-[10px] text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700">
+                      <Keyboard className="w-3 h-3" />
+                      <span>awaiting input</span>
+                    </span>
+                  )}
                   <button type="submit" className="p-1 bg-blue-600 text-white rounded hover:bg-blue-500 cursor-pointer">
                     <Send className="w-3.5 h-3.5" />
                   </button>
@@ -374,7 +499,7 @@ export default function App() {
             {/* Profiler Tab */}
             {activeTab === 'profiler' && (
               <div className="p-6 bg-[#0f172a] text-xs space-y-4 overflow-y-auto">
-                <h3 className="text-sm font-bold text-slate-100">V0IDSKRIPT v3.0 Profiler</h3>
+                <h3 className="text-sm font-bold text-slate-100">V0IDSKRIPT v4.1 Profiler</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-[#1e293b] p-4 rounded border border-[#334155]">
                     <div className="text-slate-400 mb-1">Execution Time</div>
@@ -385,13 +510,35 @@ export default function App() {
                     <div className="text-xl font-bold text-blue-400">{stats.steps} steps</div>
                   </div>
                 </div>
+
+                <div className="bg-[#1e293b] p-4 rounded border border-[#334155]">
+                  <div className="text-slate-300 font-bold mb-2">Sandbox Limits (this run)</div>
+                  <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-[11px] text-slate-400">
+                    <div>Max steps</div>
+                    <div className="text-slate-200">{DEFAULT_LIMITS.maxSteps.toLocaleString()}</div>
+                    <div>Max iterations / loop</div>
+                    <div className="text-slate-200">{DEFAULT_LIMITS.maxLoopIterations.toLocaleString()}</div>
+                    <div>Max total loop iterations</div>
+                    <div className="text-slate-200">{DEFAULT_LIMITS.maxTotalLoopIterations.toLocaleString()}</div>
+                    <div>Max call depth</div>
+                    <div className="text-slate-200">{DEFAULT_LIMITS.maxCallDepth.toLocaleString()}</div>
+                    <div>Wall clock budget</div>
+                    <div className="text-slate-200">{DEFAULT_LIMITS.maxTimeMs ? `${DEFAULT_LIMITS.maxTimeMs} ms` : 'disabled'}</div>
+                    <div>Status</div>
+                    <div className="text-slate-200">{stats.status}</div>
+                  </div>
+                  <p className="mt-3 text-[10px] text-slate-500">
+                    Every limit is configurable: <code className="text-blue-400">new V0idInterpreter({'{ limits: { maxSteps: 0 } }'})</code>,
+                    or <code className="text-blue-400">--max-steps N</code> / <code className="text-blue-400">--unlimited</code> on the CLI.
+                  </p>
+                </div>
               </div>
             )}
 
             {/* AST Inspector */}
             {activeTab === 'ast' && (
               <div className="p-4 bg-[#0f172a] text-xs font-mono overflow-y-auto h-full text-slate-300">
-                <h3 className="text-sm font-bold text-slate-100 mb-2">V0IDSKRIPT v3.0 Parsed AST</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">V0IDSKRIPT v4.1 Parsed AST</h3>
                 <pre className="bg-[#1e293b] p-3 rounded border border-[#334155] overflow-x-auto text-[11px]">
                   {JSON.stringify(astTree, null, 2)}
                 </pre>
@@ -409,15 +556,73 @@ export default function App() {
               <div className="flex items-center space-x-2">
                 <BookOpen className="w-4 h-4 text-blue-400" />
                 <h2 className="text-sm font-bold text-slate-100">
-                  V0IDSKRIPT v3.0 Systems Kernel Specification Manual
+                  V0IDSKRIPT v4.1 Systems Kernel Specification Manual
                 </h2>
               </div>
               <button onClick={() => setShowSpecModal(false)} className="text-slate-400 hover:text-white font-bold px-2 py-1 cursor-pointer">
                 ✕
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 text-slate-300 text-xs space-y-4 leading-relaxed">
-              <p>Full reference specification located at <code className="text-blue-400">/home/user/V0IDSKRIPT_SPEC_AND_GUIDE.md</code></p>
+            <div className="p-6 overflow-y-auto flex-1 text-slate-300 text-xs space-y-5 leading-relaxed">
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">1. Types are enforced</h3>
+                <p>Annotations on <code className="text-slate-100">val</code>/<code className="text-slate-100">var</code>, parameters,
+                <code className="text-slate-100">-&gt; T</code> return types, record fields, enum payloads and generic parameters are checked
+                at runtime. Integers widen into floats (<code className="text-slate-100">i32</code> &#8594; <code className="text-slate-100">f64</code>),
+                floats never narrow into integers, and <code className="text-slate-100">T?</code> also accepts <code className="text-slate-100">nil</code>.</p>
+                <pre className="mt-2 bg-[#1e293b] p-3 rounded border border-[#334155] text-[11px] overflow-x-auto">{`val count: i32 = 4        # ok
+val ratio: f64 = count    # ok (widening)
+val bad:   i32 = 1.5      # Type Error
+fn area(in r: f64) -> f64 :: do return 3.14 * r * r end`}</pre>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">2. Parameter modes have semantics</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><code className="text-slate-100">in</code> (default) — read-only borrow: the callee can neither rebind nor write through it.</li>
+                  <li><code className="text-slate-100">out</code> — write-only slot, starts as <code className="text-slate-100">nil</code> and is copied back to the caller on return.</li>
+                  <li><code className="text-slate-100">inout</code> — copy-in / copy-out: reads the caller&apos;s value, writes it back on return.</li>
+                  <li><code className="text-slate-100">own</code> — the callee gets a deep copy; the caller&apos;s value is untouched.</li>
+                  <li><code className="text-slate-100">ref</code> — aliases the caller&apos;s storage; every read and write is immediate.</li>
+                </ul>
+                <pre className="mt-2 bg-[#1e293b] p-3 rounded border border-[#334155] text-[11px] overflow-x-auto">{`fn fill(out x: i32) :: do x = 42 end
+var v = 0
+fill(v)          # v == 42`}</pre>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">3. Contracts are verified</h3>
+                <p><code className="text-slate-100">impl C for T :: bind ... end</code> must declare every method of <code className="text-slate-100">contract C</code>
+                with the same parameter count, the same modes and matching types. A contract name can also be used as a parameter type.</p>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">4. Vectorised operators</h3>
+                <pre className="mt-2 bg-[#1e293b] p-3 rounded border border-[#334155] text-[11px] overflow-x-auto">{`[1,2,3] @map |x| => x * 2
+[1,2,3] @filter |x| => x > 1
+[1,2,3] @reduce |acc, x| => acc + x, 0    # -> 6
+a #* b      # tensor GEMM        u <.> v   # dot product
+u <x> v     # cross product      x |> f()  # pipeline`}</pre>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">5. I/O, graphics and input</h3>
+                <p><code className="text-slate-100">std::io::read_line()</code> suspends the program until a line is submitted: from this
+                console in the playground, from stdin in the CLI. <code className="text-slate-100">gfx</code> draws to the canvas here and to the
+                terminal (24-bit ANSI) or PNG files under the CLI. <code className="text-slate-100">input::is_key_pressed</code> reads real key
+                presses in both, and <code className="text-slate-100">input::get_mouse</code> reports the pointer over the viewport.</p>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-bold text-blue-400 mb-1">6. Sandbox</h3>
+                <p>Programs are limited to {DEFAULT_LIMITS.maxSteps.toLocaleString()} evaluated steps,
+                {DEFAULT_LIMITS.maxLoopIterations.toLocaleString()} iterations per loop (and
+                {DEFAULT_LIMITS.maxTotalLoopIterations.toLocaleString()} in total, which also covers <code className="text-slate-100">loop</code>),
+                plus a call-depth guard. All limits are configurable via the
+                <code className="text-slate-100">limits</code> option or the CLI flags.</p>
+              </section>
+
+              <p className="text-slate-500">Full reference: <code className="text-blue-400">README.md</code> in the repository root.</p>
             </div>
           </div>
         </div>
